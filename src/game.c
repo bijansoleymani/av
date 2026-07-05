@@ -8,10 +8,7 @@
  * This file is built up in layers; see game_protos.h for the full roster.
  */
 #include "dos.h"
-#include "game_protos.h"
-
-/* IMG(off): a sprite-pointer global is just a word (dsptr) in DS. */
-#define IMG(off) UW(off)
+#include "game_protos.h"      /* pulls in game.h: IMG(), named accessors */
 
 /* ============================ render primitives ============================ */
 

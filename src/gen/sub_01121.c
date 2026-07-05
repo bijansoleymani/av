@@ -1,269 +1,134 @@
 /* 0x01121 sub_01121 - ball/player collision + wall/net bounce resolution */
 #include "dos.h"
 #include "game_protos.h"
-#define IMG(o) UW(o)
 
 int sub_01121(void)
 {
-    /* locals: [bp-2] loc2, [bp-4] loc4, [bp-6] loc6 */
-    int loc2, loc4, loc6;
-    int si;          /* loop / side index */
-    int di;          /* scratch (dx-like distance) */
-    int ax, dx, bx;
-    unsigned int uax;        /* for unsigned mul */
-    int cl;
+    int player;
+    int dx_dist;            /* horizontal ball-to-player distance metric */
+    int dy_half;            /* (ball_y - player_y) >> 1 */
+    int dist_sq;            /* squared-distance collision metric */
+    int spin;              /* 8 - (hit_count & 0xf), added to velocities */
+    int v;                  /* scratch velocity value */
 
-    si = 0;                                   /* xor si,si */
-    goto L125c;                               /* jmp 0x125c */
+    /* ---- collision test against each player ---- */
+    for (player = 0; player < 2; player++) {
+        dx_dist = ball_x - player_x(player) - (short)(player * 7);
+        dy_half = (ball_y - player_y(player)) >> 1;
 
-L112e:
-    bx = si << 1;                             /* mov bx,si; shl bx,1 */
-    di = W(0x9c6);                            /* mov di,[0x9c6] */
-    ax = W(0x98c + (unsigned)bx);             /* mov ax,[bx+0x98c] */
-    di = (short)(di - ax);                    /* sub di,ax */
-    ax = si;                                  /* mov ax,si */
-    dx = 7;                                    /* mov dx,7 */
-    ax = (short)(ax * dx);                    /* mul dx (low 16) */
-    di = (short)(di - ax);                    /* sub di,ax */
-    bx = si << 1;                             /* mov bx,si; shl bx,1 */
-    ax = W(0x98a);                            /* mov ax,[0x98a] */
-    dx = W(0x9e4 + (unsigned)bx);             /* mov dx,[bx+0x9e4] */
-    ax = (short)(ax - dx);                    /* sub ax,dx */
-    ax = ax >> 1;                             /* sar ax,1 */
-    loc6 = ax;                                /* mov [bp-6],ax */
-    ax = di;                                  /* mov ax,di */
-    ax = ax >> 1;                             /* sar ax,1 */
-    ax = ax >> 1;                             /* sar ax,1 */
-    uax = (unsigned short)((unsigned short)ax * (unsigned short)di); /* mul di -> ax (low) */
-    /* push ax */
-    {
-        unsigned int prod_di = uax;
-        uax = (unsigned short)((unsigned short)loc6 * (unsigned short)loc6); /* mul [bp-6] */
-        dx = (short)(prod_di + uax);          /* pop dx(=prod_di); add dx,ax */
-    }
-    loc4 = dx;                                /* mov [bp-4],dx */
-    if ((short)dx < 0x6e) goto L1174;         /* cmp dx,0x6e; jl 0x1174 */
-    goto L1243;                               /* jmp 0x1243 */
+        /* dist_sq = |dx|*dx (via dx>>2) + dy_half^2, computed in 16 bits */
+        dist_sq = (short)((unsigned short)((unsigned short)(dx_dist >> 2)
+                                            * (unsigned short)dx_dist)
+                          + (unsigned short)((unsigned short)dy_half
+                                              * (unsigned short)dy_half));
 
-L1174:
-    ax = hit_count;                           /* mov ax,[0x9e2] */
-    ax = ax & 0xf;                            /* and ax,0xf */
-    dx = 8;                                    /* mov dx,8 */
-    dx = (short)(dx - ax);                    /* sub dx,ax */
-    loc2 = dx;                                /* mov [bp-2],dx */
-    bx = si << 1;                             /* mov bx,si; shl bx,1 */
-    if (W(0x9e8 + (unsigned)bx) <= -1) goto L11ba; /* cmp [bx+0x9e8],-1; jle */
-    ax = W(0x9b6);                            /* mov ax,[0x9b6] */
-    if (ax >= 0) goto L1196;                  /* or ax,ax; jge 0x1196 */
-    ax = (short)(-ax);                        /* neg ax */
-L1196:
-    ax = (short)(-ax);                        /* neg ax */
-    bx = si << 1;                             /* mov bx,si; shl bx,1 */
-    bx = W(0x9e8 + (unsigned)bx);             /* mov bx,[bx+0x9e8] */
-    bx = bx << 1;                             /* shl bx,1 */
-    dx = W(0x264 + (unsigned)bx);             /* mov dx,[bx+0x264] */
-    bx = 3;                                    /* mov bx,3 */
-    cl = W(0x9bc);                            /* mov cx,[0x9bc] */
-    bx = bx << (cl & 0x1f);                   /* shl bx,cl */
-    cl = bx;                                   /* mov cx,bx */
-    dx = dx << (cl & 0x1f);                   /* shl dx,cl */
-    ax = (short)(ax + dx);                    /* add ax,dx */
-    W(0x9b6) = ax;                            /* mov [0x9b6],ax */
-    goto L11c8;                               /* jmp 0x11c8 */
+        if (dist_sq >= 0x6e) {
+            /* no hit: clear this side's "in contact" flag if it was set */
+            if (W(0x9de + player * 2) != 0) {   /* per-side contact flag */
+                bounce_shift = 0;
+                W(0x9de + player * 2) = 0;
+            }
+            continue;
+        }
 
-L11ba:
-    ax = W(0x9b6);                            /* mov ax,[0x9b6] */
-    if (ax >= 0) goto L11c3;                  /* or ax,ax; jge 0x11c3 */
-    ax = (short)(-ax);                        /* neg ax */
-L11c3:
-    ax = (short)(-ax);                        /* neg ax */
-    W(0x9b6) = ax;                            /* mov [0x9b6],ax */
+        /* ---- ball is touching player: bounce it away ---- */
+        spin = 8 - (hit_count & 0xf);
 
-L11c8:
-    ax = loc2;                                /* mov ax,[bp-2] */
-    W(0x9b6) = (short)(W(0x9b6) + ax);        /* add [0x9b6],ax */
-    ax = di;                                  /* mov ax,di */
-    if (ax >= 0) goto L11d7;                  /* or ax,ax; jge 0x11d7 */
-    ax = (short)(-ax);                        /* neg ax */
-L11d7:
-    uax = (unsigned short)((unsigned short)ax * (unsigned short)di); /* mul di -> ax */
-    {
-        unsigned int t_push1 = uax;           /* push ax */
-        ax = si;                              /* mov ax,si */
-        dx = 6;                               /* mov dx,6 */
-        ax = (short)(ax * dx);                /* mul dx (low) */
-        bx = ax;                              /* mov bx,ax */
-        ax = W(0x9ca + (unsigned)bx);         /* mov ax,[bx+0x9ca] */
+        if (player_state(player) > -1) {
+            /* airborne player: add a jump-driven kick to the vertical bounce */
+            int kick = W(0x264 + player_state(player) * 2)   /* jump-kick table */
+                       << ((3 << (bounce_shift & 0x1f)) & 0x1f);
+            ball_vy = -(ball_vy < 0 ? -ball_vy : ball_vy) + kick;
+        } else {
+            /* grounded player */
+            ball_vy = -(ball_vy < 0 ? -ball_vy : ball_vy);
+        }
+        ball_vy = (short)(ball_vy + spin);
+
+        /* horizontal impulse from the hit offset plus the player's input */
         {
-            unsigned int t_push2 = (unsigned short)ax; /* push ax */
-            ax = si;                          /* mov ax,si */
-            dx = 6;                           /* mov dx,6 */
-            ax = (short)(ax * dx);            /* mul dx (low) */
-            bx = ax;                          /* mov bx,ax */
-            ax = (short)t_push2;              /* pop ax */
-            ax = (short)(ax + W(0x9c8 + (unsigned)bx)); /* add ax,[bx+0x9c8] */
-            cl = W(0x9bc);                    /* mov cx,[0x9bc] */
-            cl = (short)(cl + 4);             /* add cx,4 */
-            ax = ax << (cl & 0x1f);           /* shl ax,cl */
-            dx = (short)t_push1;              /* pop dx */
-            dx = (short)(dx + ax);            /* add dx,ax */
-            dx = (short)(dx + loc2);          /* add dx,[bp-2] */
-            W(0x988) = (short)(W(0x988) + dx);/* add [0x988],dx */
+            int abs_dx = (dx_dist < 0 ? -dx_dist : dx_dist);
+            int impulse = (short)((unsigned short)((unsigned short)abs_dx
+                                                    * (unsigned short)dx_dist));
+            int steer = (short)((ctrl_right(player) + ctrl_left(player))
+                                << ((bounce_shift + 4) & 0x1f));
+            ball_vx = (short)(ball_vx + impulse + steer + spin);
+        }
+
+        /* mark contact; on a fresh contact, hand the serve to this side */
+        if (W(0x9de + player * 2) == 0) {       /* per-side contact flag */
+            W(0xa4d) = 0xc8;                     /* serve-dot / effect state */
+            W(0xa4b) = 0;
+            W(0x9de + player * 2) = 1;
+            if (server == player) {
+                touches = (short)(touches + 1);
+            } else {
+                server = player;
+                touches = 0;
+            }
         }
     }
-    bx = si << 1;                             /* mov bx,si; shl bx,1 */
-    if (W(0x9de + (unsigned)bx) != 0) goto L125b; /* cmp [bx+0x9de],0; jne */
-    W(0xa4d) = 0xc8;                          /* mov [0xa4d],0xc8 */
-    W(0xa4b) = 0;                             /* mov [0xa4b],0 */
-    bx = si << 1;                             /* mov bx,si; shl bx,1 */
-    W(0x9de + (unsigned)bx) = 1;              /* mov [bx+0x9de],1 */
-    ax = server;                              /* mov ax,[0x9d6] */
-    if (ax == si) goto L123d;                 /* cmp ax,si; je 0x123d */
-    server = si;                              /* mov [0x9d6],si */
-    W(0x9dc) = 0;                             /* mov [0x9dc],0 */
-    goto L125b;                               /* jmp 0x125b */
-L123d:
-    W(0x9dc) = (short)(W(0x9dc) + 1);         /* inc [0x9dc] */
-    goto L125b;                               /* jmp 0x125b */
 
-L1243:
-    bx = si << 1;                             /* mov bx,si; shl bx,1 */
-    if (W(0x9de + (unsigned)bx) == 0) goto L125b; /* cmp [bx+0x9de],0; je */
-    ax = 0;                                    /* xor ax,ax */
-    W(0x9bc) = ax;                            /* mov [0x9bc],ax */
-    bx = si << 1;                             /* mov bx,si; shl bx,1 */
-    W(0x9de + (unsigned)bx) = ax;             /* mov [bx+0x9de],ax */
+    /* ---- net / post collision resolution ---- */
+    player = 1;   /* reused as a "hit the net band" flag below */
+    if (ball_y > 0x5b) {
+        if (ball_prev_x < 0x80 && ball_x > 0x7f) {
+            /* crossed into the net from the left: reflect and clamp X */
+            ball_vx = -(ball_vx < 0 ? -ball_vx : ball_vx) >> 1;
+            ball_xf = 0x1fc0;
+            player = 0;
+        } else if (ball_prev_x > 0x9f && ball_x < 0xa0) {
+            /* crossed into the net from the right */
+            ball_vx = (ball_vx < 0 ? -ball_vx : ball_vx) >> 1;
+            ball_xf = 0x2800;
+            player = 0;
+        }
+    }
 
-L125b:
-    si = (short)(si + 1);                     /* inc si */
-L125c:
-    if (si >= 2) goto L1264;                  /* cmp si,2; jge 0x1264 */
-    goto L112e;                               /* jmp 0x112e */
+    /* ---- ball inside the net's vertical band: post-top bounce ---- */
+    if (player == 0)
+        return 0;
+    if (ball_y <= 0x51 || ball_x <= 0x7f || ball_x >= 0xa0)
+        return 0;
 
-L1264:
-    si = 1;                                   /* mov si,1 */
-    if (W(0x98a) <= 0x5b) goto L12bb;         /* cmp [0x98a],0x5b; jle */
-    if (W(0xa3a) >= 0x80) goto L1295;         /* cmp [0xa3a],0x80; jge */
-    if (W(0x9c6) <= 0x7f) goto L1295;         /* cmp [0x9c6],0x7f; jle */
-    ax = W(0x988);                            /* mov ax,[0x988] */
-    if (ax >= 0) goto L1286;                  /* or ax,ax; jge 0x1286 */
-    ax = (short)(-ax);                        /* neg ax */
-L1286:
-    ax = (short)(-ax);                        /* neg ax */
-    ax = ax >> 1;                             /* sar ax,1 */
-    W(0x988) = ax;                            /* mov [0x988],ax */
-    W(0xa40) = 0x1fc0;                        /* mov [0xa40],0x1fc0 */
-    goto L12b9;                               /* jmp 0x12b9 */
+    if (ball_y > 0x5b) {
+        /* just under the net rope: reflect vx toward the near side, done */
+        if (ball_x < 0x94)
+            ball_vx = -(ball_vx < 0 ? -ball_vx : ball_vx);   /* push left */
+        else
+            ball_vx = (ball_vx < 0 ? -ball_vx : ball_vx);    /* push right */
+        return 0;
+    }
 
-L1295:
-    if (W(0xa3a) <= 0x9f) goto L12bb;         /* cmp [0xa3a],0x9f; jle */
-    if (W(0x9c6) >= 0xa0) goto L12bb;         /* cmp [0x9c6],0xa0; jge */
-    ax = W(0x988);                            /* mov ax,[0x988] */
-    if (ax >= 0) goto L12ae;                  /* or ax,ax; jge 0x12ae */
-    ax = (short)(-ax);                        /* neg ax */
-L12ae:
-    ax = ax >> 1;                             /* sar ax,1 */
-    W(0x988) = ax;                            /* mov [0x988],ax */
-    W(0xa40) = 0x2800;                        /* mov [0xa40],0x2800 */
-L12b9:
-    si = 0;                                    /* xor si,si */
-L12bb:
-    if (si != 0) goto L12c2;                   /* or si,si; jne 0x12c2 */
-    goto L13c4;                                /* jmp 0x13c4 */
-L12c2:
-    if (W(0x98a) > 0x51) goto L12cc;           /* cmp [0x98a],0x51; jg */
-    goto L13c4;                                /* jmp 0x13c4 */
-L12cc:
-    if (W(0x9c6) > 0x7f) goto L12d6;           /* cmp [0x9c6],0x7f; jg */
-    goto L13c4;                                /* jmp 0x13c4 */
-L12d6:
-    if (W(0x9c6) < 0xa0) goto L12e1;           /* cmp [0x9c6],0xa0; jl */
-    goto L13c4;                                /* jmp 0x13c4 */
-L12e1:
-    if (W(0x98a) <= 0x5b) goto L1310;          /* cmp [0x98a],0x5b; jle */
-    if (W(0x9c6) >= 0x94) goto L1301;          /* cmp [0x9c6],0x94; jge */
-    ax = W(0x988);                            /* mov ax,[0x988] */
-    if (ax >= 0) goto L12f9;                   /* or ax,ax; jge */
-    ax = (short)(-ax);                         /* neg ax */
-L12f9:
-    ax = (short)(-ax);                         /* neg ax */
-    W(0x988) = ax;                            /* mov [0x988],ax */
-    goto L13c4;                                /* jmp 0x13c4 */
-L1301:
-    ax = W(0x988);                            /* mov ax,[0x988] */
-    if (ax >= 0) goto L130a;                   /* or ax,ax; jge */
-    ax = (short)(-ax);                         /* neg ax */
-L130a:
-    W(0x988) = ax;                            /* mov [0x988],ax */
-    goto L13c4;                                /* jmp 0x13c4 */
+    /* at the posts: compare the ball's overlap against the post's profile
+     * column W(0x250 + (0x5b - ball_y)*2); no overlap -> no bounce */
+    if (ball_x > 0x93) {
+        /* right post */
+        if (W(0x250 + (0x5b - ball_y) * 2) > (0xa1 - ball_x))   /* post profile */
+            return 0;
+    } else {
+        /* left post (ball_x <= 0x93) */
+        if (W(0x250 + (0x5b - ball_y) * 2) > (short)(ball_x + 0xff7b))  /* ball_x-133 */
+            return 0;
+    }
 
-L1310:
-    if (W(0x9c6) <= 0x93) goto L1330;          /* cmp [0x9c6],0x93; jle */
-    bx = 0x5b;                                 /* mov bx,0x5b */
-    bx = (short)(bx - W(0x98a));               /* sub bx,[0x98a] */
-    bx = bx << 1;                              /* shl bx,1 */
-    ax = W(0x250 + (unsigned)bx);              /* mov ax,[bx+0x250] */
-    dx = 0xa1;                                 /* mov dx,0xa1 */
-    dx = (short)(dx - W(0x9c6));               /* sub dx,[0x9c6] */
-    if (ax <= dx) goto L1357;                  /* cmp ax,dx; jle 0x1357 */
-L1330:
-    if (W(0x9c6) < 0x94) goto L133b;           /* cmp [0x9c6],0x94; jl */
-    goto L13c4;                                /* jmp 0x13c4 */
-L133b:
-    bx = 0x5b;                                 /* mov bx,0x5b */
-    bx = (short)(bx - W(0x98a));               /* sub bx,[0x98a] */
-    bx = bx << 1;                              /* shl bx,1 */
-    ax = W(0x250 + (unsigned)bx);              /* mov ax,[bx+0x250] */
-    dx = W(0x9c6);                             /* mov dx,[0x9c6] */
-    dx = (short)(dx + 0xff7b);                 /* add dx,0xff7b (-133) */
-    if (ax <= dx) goto L1357;                  /* cmp ax,dx; jle 0x1357 */
-    goto L13c4;                                /* jmp 0x13c4 */
+    /* ---- post bounce ---- */
+    if (ball_vy > 0) {
+        int edge = (short)(ball_x + 0xff6f);   /* ball_x - 145 */
+        if (edge < -5)
+            ball_vx = -(ball_vx < 0 ? -ball_vx : ball_vx);
+        if (edge > 5)
+            ball_vx = (ball_vx < 0 ? -ball_vx : ball_vx);
+        ball_vy = -(ball_vy < 0 ? -ball_vy : ball_vy);
+    }
 
-L1357:
-    if (W(0x9b6) <= 0) goto L1398;             /* cmp [0x9b6],0; jle */
-    di = W(0x9c6);                             /* mov di,[0x9c6] */
-    di = (short)(di + 0xff6f);                 /* add di,0xff6f (-145) */
-    if (di >= -5) goto L1379;                  /* cmp di,-5; jge */
-    ax = W(0x988);                            /* mov ax,[0x988] */
-    if (ax >= 0) goto L1374;                   /* or ax,ax; jge */
-    ax = (short)(-ax);                         /* neg ax */
-L1374:
-    ax = (short)(-ax);                         /* neg ax */
-    W(0x988) = ax;                            /* mov [0x988],ax */
-L1379:
-    if (di <= 5) goto L138a;                   /* cmp di,5; jle */
-    ax = W(0x988);                            /* mov ax,[0x988] */
-    if (ax >= 0) goto L1387;                   /* or ax,ax; jge */
-    ax = (short)(-ax);                         /* neg ax */
-L1387:
-    W(0x988) = ax;                            /* mov [0x988],ax */
-L138a:
-    ax = W(0x9b6);                            /* mov ax,[0x9b6] */
-    if (ax >= 0) goto L1393;                   /* or ax,ax; jge */
-    ax = (short)(-ax);                         /* neg ax */
-L1393:
-    ax = (short)(-ax);                         /* neg ax */
-    W(0x9b6) = ax;                            /* mov [0x9b6],ax */
+    /* damp overly fast velocities after a post bounce */
+    v = (ball_vx < 0 ? -ball_vx : ball_vx);
+    if (v > 0x20)
+        ball_vx = ball_vx >> 1;
+    v = (ball_vy < 0 ? -ball_vy : ball_vy);
+    if (v > 0x20)
+        ball_vy = ball_vy >> 1;
 
-L1398:
-    ax = W(0x988);                            /* mov ax,[0x988] */
-    if (ax >= 0) goto L13a1;                   /* or ax,ax; jge */
-    ax = (short)(-ax);                         /* neg ax */
-L13a1:
-    if (ax <= 0x20) goto L13ae;                /* cmp ax,0x20; jle */
-    ax = W(0x988);                            /* mov ax,[0x988] */
-    ax = ax >> 1;                             /* sar ax,1 */
-    W(0x988) = ax;                            /* mov [0x988],ax */
-L13ae:
-    ax = W(0x9b6);                            /* mov ax,[0x9b6] */
-    if (ax >= 0) goto L13b7;                   /* or ax,ax; jge */
-    ax = (short)(-ax);                         /* neg ax */
-L13b7:
-    if (ax <= 0x20) goto L13c4;                /* cmp ax,0x20; jle */
-    ax = W(0x9b6);                            /* mov ax,[0x9b6] */
-    ax = ax >> 1;                             /* sar ax,1 */
-    W(0x9b6) = ax;                            /* mov [0x9b6],ax */
-
-L13c4:
-    return 0;                                  /* mov sp,bp; pop bp/di/si; ret */
+    return 0;
 }

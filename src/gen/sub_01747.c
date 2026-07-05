@@ -3,7 +3,6 @@
  *                     all round state for the next serve. */
 #include "dos.h"
 #include "game_protos.h"
-#define IMG(o) UW(o)
 
 /* RTL / library helpers reached by this function but living outside the
  * decompiled game range.  By usage:
@@ -17,12 +16,6 @@ extern void  sub_04b2b(int ms);
 extern dsptr sub_04439(int value, dsptr buf, int radix);
 extern void  sub_03f7a(int ms);
 
-/* far-call RTL used here:
- *   0x6a19 bar        -> bgi_bar(x1,y1,x2,y2)
- *   0x6c42 putimage   -> bgi_outtextxy(x,y,str)  (far string ptr)
- *   0x6b04 lib_6b04   -> bgi_settextstyle_dir(dir)
- *   0x6129 lib_6129   -> bgi_outtextxy(x,y,str)  (near string ptr; text draw) */
-
 /* The original keeps a small itoa scratch buffer on the stack at SS:[bp-4].
  * Our model only exposes DS[], and sub_04439/bgi_outtextxy take a dsptr, so we
  * reserve a private scratch at the very top of DS (above DGROUP/heap). */
@@ -30,177 +23,135 @@ extern void  sub_03f7a(int ms);
 
 int sub_01747(void)
 {
-    int si;                 /* winning side index (0 or 1)              */
-    int di;                 /* |[0x988]| >> 3   (ball x-velocity cap)   */
-    int ax;
-    int loc6;               /* [bp-6] = |[0x9b6]| >> 3  (y-velocity cap)*/
-    int loc8;               /* [bp-8] = settle-loop countdown (0x14)    */
-    int loca;               /* [bp-0xa] = si*0xe6 + 0x28                 */
-    int bx;
-    dsptr buf = S1747_BUF;  /* [bp-4] itoa buffer                       */
+    int winner;         /* winning side (0 = left, 1 = right)            */
+    int vx_cap;         /* |ball_vx| >> 3  (x-velocity magnitude cap)    */
+    int vy_cap;         /* |ball_vy| >> 3  (y-velocity magnitude cap)    */
+    int settle_left;    /* settle-loop countdown (starts at 0x14)        */
+    int score_x;        /* winner*0xe6 + 0x28 : score strip x-coordinate */
+    int mag;            /* scratch for magnitude/clamp arithmetic        */
+    dsptr buf;          /* itoa result pointer                           */
 
-    /* ---- decide winning side (si) ---- */
-    if (W(0x9dc) <= 2) {                    /* 01747: cmp [0x9dc],2 ; jle 0x175f */
-        if (W(0x9c6) >= 0x96) {             /* 0175f: cmp [0x9c6],0x96 ; jge 0x176c */
-            si = 0;                         /* 0176c: xor si,si */
-        } else {
-            si = 1;                         /* 01767: mov si,1 */
-        }
+    /* ---- decide the winning side ---- */
+    if (touches <= 2) {
+        /* few touches: whoever the ball ended up nearest wins */
+        winner = (ball_x >= 0x96) ? 0 : 1;
     } else {
-        si = 1 - server;                    /* 01756: mov si,1 ; sub si,[0x9d6] */
+        winner = 1 - server;
     }
 
-    sub_01452();                            /* 0176e: call 0x1452 */
+    sub_01452();
 
-    /* ---- loc6 = |[0x9b6]| >> 3 (signed shift) ---- */
-    ax = W(0x9b6);                          /* 01771 */
-    if (ax < 0) ax = -ax;                   /* 01774: or/jge/neg */
-    ax = ax >> 1; ax = ax >> 1; ax = ax >> 1; /* 0177a-0177e: sar x3 */
-    loc6 = ax;                              /* 01780: [bp-6] = ax */
+    /* clamp targets: shrink the ball's velocity magnitude by a factor of 8 */
+    vy_cap = ball_vy;
+    if (vy_cap < 0) vy_cap = -vy_cap;
+    vy_cap >>= 3;
 
-    /* ---- di = |[0x988]| >> 3 ---- */
-    ax = W(0x988);                          /* 01783 */
-    if (ax < 0) ax = -ax;                   /* 01786: or/jge/neg */
-    di = ax;                                /* 0178c: mov di,ax */
-    di = di >> 1; di = di >> 1; di = di >> 1; /* 0178e-01792: sar x3 */
+    vx_cap = ball_vx;
+    if (vx_cap < 0) vx_cap = -vx_cap;
+    vx_cap >>= 3;
 
-    loc8 = 0x14;                            /* 01794: [bp-8] = 0x14 */
+    settle_left = 0x14;
 
-    ax = 0;                                 /* 01799: xor ax,ax */
-    W(0x9d2) = ax;                          /* 0179b */
-    W(0x9cc) = ax;                          /* 0179e */
+    /* ---- damped settle loop: run at least 0x14 frames, then keep going
+     *      until both players are grounded (player_state == -1).
+     *      The disasm's back-edges (jmp 0x1799) re-enter ABOVE these two
+     *      writes, so ctrl_jump for both players is re-zeroed at the top of
+     *      EVERY iteration (0x1799: xor ax,ax / mov [0x9d2],ax / mov
+     *      [0x9cc],ax), clearing any jump the input ISR posted mid-frame. ---- */
+    do {
+        ctrl_jump(1) = 0;   /* 0179b: W(0x9d2) */
+        ctrl_jump(0) = 0;   /* 0179e: W(0x9cc) */
 
-L1799:
-    sub_04b57();                            /* 017a1: call 0x4b57 */
-    sub_00e7a();                            /* 017a4: call 0xe7a */
+        sub_04b57();
+        sub_00e7a();
 
-    /* ---- clamp [0x988] magnitude to di ---- */
-    ax = W(0x988);                          /* 017a7 */
-    if (ax < 0) ax = -ax;                   /* 017aa: or/jge/neg */
-    if (ax > di) {                          /* 017b0: cmp ax,di ; jle 0x17c8 */
-        if (W(0x988) >= 0) {                /* 017b4: cmp [0x988],0 ; jge 0x17c4 */
-            W(0x988) = di;                  /* 017c4 */
-        } else {
-            ax = di;                        /* 017bb: mov ax,di */
-            ax = -ax;                       /* 017bd: neg ax */
-            W(0x988) = ax;                  /* 017bf */
-        }
-    }
+        /* clamp ball_vx magnitude to vx_cap, preserving sign */
+        mag = ball_vx;
+        if (mag < 0) mag = -mag;
+        if (mag > vx_cap)
+            ball_vx = (ball_vx >= 0) ? vx_cap : -vx_cap;
 
-    /* ---- clamp [0x9b6] magnitude to loc6 ---- */
-    ax = W(0x9b6);                          /* 017c8 */
-    if (ax < 0) ax = -ax;                   /* 017cb: or/jge/neg */
-    if (ax > loc6) {                        /* 017d1: cmp ax,[bp-6] ; jle 0x17ed */
-        if (W(0x9b6) >= 0) {                /* 017d6: cmp [0x9b6],0 ; jge 0x17e7 */
-            W(0x9b6) = loc6;                /* 017e7-017ea */
-        } else {
-            ax = loc6;                      /* 017dd: mov ax,[bp-6] */
-            ax = -ax;                       /* 017e0: neg ax */
-            W(0x9b6) = ax;                  /* 017e2 */
-        }
-    }
+        /* clamp ball_vy magnitude to vy_cap, preserving sign */
+        mag = ball_vy;
+        if (mag < 0) mag = -mag;
+        if (mag > vy_cap)
+            ball_vy = (ball_vy >= 0) ? vy_cap : -vy_cap;
 
-    sub_01121();                            /* 017ed: call 0x1121 */
+        sub_01121();
 
-    if (sound_on != 0) {                   /* 017f0: cmp [0x24e],0 ; je 0x1811 */
-        if (si == W(0xa14)) {               /* 017f7: cmp si,[0xa14] ; jne 0x1808 */
-            sub_04b2b(0x1388);              /* 017fd-01801 */
-        } else {
-            sub_04b2b(0x64);                /* 01808-0180c */
-        }
-    }
-    /* 01811: */
-    sub_01006();                            /* 01811: call 0x1006 */
-    sub_01452();                            /* 01814: call 0x1452 */
+        if (sound_on != 0)
+            sub_04b2b(winner == lead_side ? 0x1388 : 0x64);
 
-    ax = loc8;                              /* 01817: mov ax,[bp-8] */
-    loc8 = loc8 - 1;                        /* 0181a: dec [bp-8] */
-    if (ax > 0) goto L1799;                 /* 0181d: or ax,ax ; jle 0x1824 ; jmp 0x1799 */
+        sub_01006();
+        sub_01452();
+    } while (settle_left-- > 0 ||
+             player_state(0) != -1 || player_state(1) != -1);
 
-    /* 01824: countdown spent - keep looping until the ball is at rest */
-    if (W(0x9e8) != -1) goto L1799;         /* 01824: cmp [0x9e8],-1 ; je 0x182e ; jmp 0x1799 */
-    if (W(0x9ea) != -1) goto L1799;         /* 0182e: cmp [0x9ea],-1 ; je 0x1838 ; jmp 0x1799 */
+    /* ================= award point / update display ================= */
+    sub_04b57();
 
-    /* ================= 0x1838: award point / update display ================= */
-    sub_04b57();                            /* 01838 */
+    /* score strip x-coordinate for the winning side */
+    score_x = (int)(unsigned short)((unsigned)winner * 0xe6u) + 0x28;
 
-    /* loca = si*0xe6 + 0x28 (unsigned multiply, low 16 bits) */
-    loca = (int)(unsigned short)((unsigned)si * 0xe6u) + 0x28; /* 0183b-01845 */
+    if (winner == lead_side) {
+        /* same side still leads: clear the score strip and redraw the
+         * incremented score as text */
+        bgi_bar(score_x, 0, score_x + 0xf, 7);
 
-    if (si == W(0xa14)) {                    /* 01848: cmp si,[0xa14] ; jne 0x18bf */
-        /* clear the score strip then draw the incremented score as text */
-        bgi_bar(loca, 0, loca + 0xf, 7);     /* 0184e-0185f: bar(loca,0,loca+0xf,7) */
+        score(winner) = score(winner) + 1;
+        buf = sub_04439(score(winner), S1747_BUF, 0xa);
+        bgi_outtextxy(score_x, 0, buf);
 
-        bx = si << 1;                        /* 0186f-01871 */
-        W(bx + 0xa10) = W(bx + 0xa10) + 1;   /* 01873: inc [bx+0xa10]  (++score[si]) */
-        /* buf = itoa(score[si], buf, 10) */
-        buf = sub_04439(W(bx + 0xa10), S1747_BUF, 0xa); /* 01877-0187c */
-        /* putimage(x=loca, y=0, str=buf) -> outtextxy */
-        bgi_outtextxy(loca, 0, buf);         /* 0188c */
-
-        bx = si << 1;                        /* 01894-01896 */
-        if (W(bx + 0xa10) > 0xe) {           /* 01898: cmp [bx+0xa10],0xe ; jle 0x190d */
-            ax = W((si << 1) + 0xa10);       /* 0189f-018a3 */
-            bx = (1 - si) << 1;              /* 018a7-018ac */
-            ax = ax - W(bx + 0xa10);         /* 018ae */
-            if (ax > 1) {                    /* 018b2: cmp ax,1 ; jle 0x190d */
-                W(0x9d4) = 1;                /* 018b7: mov [0x9d4],1 (game over) */
-            }
-        }
-        /* jmp 0x190d */
+        /* game over at 15+ points with a 2-point lead */
+        if (score(winner) > 0xe &&
+            score(winner) - score(1 - winner) > 1)
+            game_over = 1;
     } else {
-        /* 018bf: winning side changed - move the small "serving side" dot.
-         * lib_6b04(c) sets the draw colour (0 = erase, 0xf = white), and
-         * lib_6129(x,y,r) draws a filled dot of radius r there. */
-        bgi_setcolor(0);                     /* 018bf-018c2: lib_6b04(0)  -> erase */
-        bgi_fillellipse((int)(unsigned short)((unsigned)(1 - si) * 0xe6u) + 0x23,
-                        3, 1, 1);            /* 018c9-018df: erase old dot */
-        bgi_setcolor(3);                     /* 018e7-018eb: lib_6b04(0xf) -> white */
-        bgi_fillellipse((int)(short)(loca + 0xfffb), 3, 1, 1); /* 018f2-01901: new dot */
-        W(0xa14) = si;                        /* 01909 */
-        /* fall through to 0x190d */
+        /* winning side changed: move the small "serving side" dot.
+         * bgi_setcolor(0) erases, bgi_setcolor(3) draws white;
+         * bgi_fillellipse draws a 1x1 filled dot. */
+        bgi_setcolor(0);
+        bgi_fillellipse((int)(unsigned short)((unsigned)(1 - winner) * 0xe6u) + 0x23,
+                        3, 1, 1);            /* erase old dot */
+        bgi_setcolor(3);
+        bgi_fillellipse((int)(short)(score_x + 0xfffb), 3, 1, 1); /* new dot */
+        lead_side = winner;
     }
 
-    /* 0190d: */
-    sub_03f7a(0x64);                          /* 0190d-01911: call 0x3f7a */
-    sub_0166f();                              /* 01916: call 0x166f */
+    sub_03f7a(0x64);
+    sub_0166f();
 
     /* ================= reset all round state for next serve ================= */
-    ax = (int)(unsigned short)((unsigned)si * 0xa5u) + 0x40; /* 01919-01920 */
-    W(0xa3a) = ax;                            /* 01923 */
-    W(0x9c6) = ax;                            /* 01926 */
-    W(0xa40) = (int)(unsigned short)((unsigned)ax << 6); /* 01929-0192e: shl ax,cl(=6) */
+    mag = (int)(unsigned short)((unsigned)winner * 0xa5u) + 0x40;
+    ball_prev_x = mag;
+    ball_x = mag;
+    ball_xf = (int)(unsigned short)((unsigned)mag << 6);
 
-    ax = 0x87;                                /* 01931 */
-    W(0x9c4) = ax;                            /* 01934 */
-    W(0x98a) = ax;                            /* 01937 */
-    W(0x9ec) = (int)(unsigned short)((unsigned)ax << 6); /* 0193a: shl ax,cl(=6) */
+    ball_prev_y = 0x87;
+    ball_y = 0x87;
+    ball_yf = (int)(unsigned short)((unsigned)0x87 << 6);
 
-    ax = 0;                                   /* 0193f */
-    W(0x9e0) = ax;                            /* 01941 */
-    W(0x9de) = ax;                            /* 01944 */
-    W(0x9dc) = ax;                            /* 01947 */
-    W(0x9b6) = ax;                            /* 0194a */
-    W(0x988) = ax;                            /* 0194d */
-    W(0xa0e) = ax;                            /* 01950 */
-    W(0xa3c) = ax;                            /* 01953 */
-    W(0x986) = 6;                             /* 01956: mov [0x986],cx (cx==6) */
+    W(0x9e0) = 0;               /* (no game.h name) round/physics state */
+    W(0x9de) = 0;               /* (no game.h name) round/physics state */
+    touches = 0;
+    ball_vy = 0;
+    ball_vx = 0;
+    ball_high = 0;
+    ball_frame = 0;
+    W(0x986) = 6;               /* (no game.h name) */
 
-    ax = 1;                                   /* 0195a */
-    W(0x9bc) = ax;                            /* 0195d */
-    W(0xa4b) = ax;                            /* 01960 */
-    W(0x9d6) = 2;                             /* 01963: server = 2 */
+    bounce_shift = 1;
+    W(0xa4b) = 1;               /* (no game.h name) */
+    server = 2;
 
-    /* [0xa3e] = |hit_count| % 5  (signed idiv remainder) */
-    ax = hit_count;                           /* 01969: mov ax,[0x9e2] */
-    if (ax < 0) ax = -ax;                     /* 0196c: or/jge/neg */
-    W(0xa3e) = ax % 5;                        /* 01972-01978: cdq; idiv 5; store dx */
+    /* serve_state = |hit_count| % 5  (signed remainder) */
+    mag = hit_count;
+    if (mag < 0) mag = -mag;
+    serve_state = mag % 5;
 
-    bx = W(0xa14) << 1;                       /* 0197c-01980 */
-    if (W(bx + 0xa10) == 0xe) {               /* 01982: cmp [bx+0xa10],0xe ; jne 0x198f */
-        W(0xa3e) = 5;                         /* 01989 */
-    }
-    W(0x9b8) = 0;                             /* 0198f */
+    if (score(lead_side) == 0xe)
+        serve_state = 5;
+    W(0x9b8) = 0;               /* (no game.h name) */
 
-    return 0;                                 /* 0199a: ret (no meaningful AX) */
+    return 0;
 }

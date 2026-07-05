@@ -1,27 +1,24 @@
 /* 0x00bee setup_round - clear screen, draw court rectangle, net sprite, and score/label text for a new round */
 #include "dos.h"
 #include "game_protos.h"
-#define IMG(o) UW(o)
 
 int setup_round(void)
 {
-    wait_vsync();                       /* 00bee: call 0x22bf */
-    bgi_cleardevice();                  /* 00bf1: lcall 0x5d80 */
+    wait_vsync();
+    bgi_cleardevice();
 
-    /* 00bf6..00c0b: push 0xc7,0x138,0xb,3 -> bgi_rectangle(x1,y1,x2,y2) (right-to-left) */
+    /* court border rectangle (x1,y1,x2,y2) */
     bgi_rectangle(3, 0xb, 0x138, 0xc7);
 
-    /* 00c0e..00c1d: push IMG(0x9b4),0x67,0x9e -> draw_sprite(x,y,img) (right-to-left) */
-    draw_sprite(0x9e, 0x67, IMG(0x9b4));
+    /* net sprite at the center of the court */
+    draw_sprite(0x9e, 0x67, net_sprite);
 
-    /* 00c20..00c31: push ds,0x35a,0,0x5a -> putimage==bgi_outtextxy(x,y,str) */
+    /* header strings: title 0x35a and the two score labels 0x36c / 0x36e */
     bgi_outtextxy(0x5a, 0, 0x35a);
-    /* 00c34..00c45: push ds,0x36c,0,0x28 -> bgi_outtextxy(0x28,0,0x36c) */
     bgi_outtextxy(0x28, 0, 0x36c);
-    /* 00c48..00c59: push ds,0x36e,0,0x10e -> bgi_outtextxy(0x10e,0,0x36e) */
     bgi_outtextxy(0x10e, 0, 0x36e);
 
-    return 0;                           /* 00c5c: ret (no meaningful AX) */
+    return 0;
 }
 
 /* NOTE: 0x00c5d..0x00d4f is a SEPARATE routine that follows setup_round's ret:

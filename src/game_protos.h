@@ -7,6 +7,7 @@
 #ifndef GAME_PROTOS_H
 #define GAME_PROTOS_H
 #include "dos.h"
+#include "game.h"      /* named game-state accessors (player_x, ball_x, …) */
 
 /* verified data / render pipeline (game.c) */
 dsptr read_chunk(int n);

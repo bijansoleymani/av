@@ -1,7 +1,6 @@
 /* 0x00300 sub_300 - detect mouse driver via INT 33h (AX=0 reset), then hide cursor (AX=2); return 1 if present else 0 */
 #include "dos.h"
 #include "game_protos.h"
-#define IMG(o) UW(o)
 
 /* The original allocates a 16-byte REGS block as a stack local at [bp-0x10].
  * In the small model SS==DS, so that local is itself a DS offset; we model it

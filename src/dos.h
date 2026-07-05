@@ -32,24 +32,8 @@ extern unsigned char VIDEO[0x4000];  /* CGA 0xB800 segment, 16 KB          */
 #define UW(o)  (*(unsigned short *)(DS + (uint16_t)(o)))    /* 16-bit unsigned      */
 #define FARPTR(o) (DS + (uint16_t)(o))                      /* host ptr for RTL use */
 
-/* ---- named scalar globals (see build/symbols.txt) ---- */
-#define ball_x     W(0x98c)     /* ball position (fixed-point, see physics)  */
-#define ball_y     W(0x98e)
-#define p1_y       W(0x9e4)     /* player baseline Y positions               */
-#define p2_y       W(0x9e6)
-#define p1_frame   W(0x9be)     /* current animation frame index, player 1   */
-#define p2_frame   W(0x9c0)
-#define server     W(0x9d6)     /* which side serves (0/1)                   */
-#define side_swap  W(0x9d8)
-#define hit_count  W(0x9e2)
-#define font_img   W(0x9c2)     /* captured "clear strip" image (dsptr)      */
-#define dat_fd     W(0xa50)     /* AV.DAT file handle                        */
-#define joy_timeout W(0xa42)
-#define joy_val    W(0xa44)
-#define sound_on   W(0x24e)
-
-/* sprite-pointer globals just hold dsptr values, addressed like any other
- * word global (e.g. W(0x994 + frame*8 + shift*2)); nothing special needed. */
+/* Named game-state accessors live in game.h (player_x, ball_x, score, …), all
+ * backed by these same W()/UW() offsets. */
 
 /* =========================== shim / RTL API ============================ */
 /* memory */
