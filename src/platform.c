@@ -23,8 +23,12 @@ void platform_shutdown(void);
  * physics is instantaneous, so we reproduce that chop explicitly: every
  * speaker_off() forces a short silence even if a tone restarts immediately. */
 #define AUDIO_RATE 44100
-#define SPK_GAP_SAMPLES 120               /* ~2.7 ms forced silence per off()   */
-#define SPK_AMP 6500
+#define SPK_GAP_SAMPLES 64                /* ~1.5 ms forced silence per off()   */
+#define SPK_WARBLE_MINFREQ 1000           /* only high tones warble (the whistle);
+                                             the low side-out tone stays clean   */
+#define SPK_WHISTLE_MUL_N 3               /* voice high tones up by 3/2 so the   */
+#define SPK_WHISTLE_MUL_D 2               /*  whistle sits at the DOS pitch       */
+#define SPK_AMP 6000
 static SDL_AudioDeviceID g_audio;
 static volatile int      g_spk_freq;      /* current tone frequency, 0 = off     */
 static volatile unsigned g_spk_off_seq;   /* bumped on every speaker_off()        */
@@ -41,7 +45,9 @@ static void audio_cb(void *ud, Uint8 *stream, int len)
         int f;
         if (g_spk_off_seq != g_spk_seen_seq) {      /* a new nosound() happened */
             g_spk_seen_seq = g_spk_off_seq;
-            g_spk_gap = SPK_GAP_SAMPLES;
+            /* warble only high tones (the point whistle); leave the low side-out
+             * tone clean so it doesn't stutter. */
+            g_spk_gap = (g_spk_freq >= SPK_WARBLE_MINFREQ) ? SPK_GAP_SAMPLES : 0;
         }
         if (g_spk_gap > 0) { out[i] = 0; g_spk_gap--; g_phase = 0.0; continue; }
         f = g_spk_freq;
@@ -235,7 +241,16 @@ int  platform_int33(dsptr in, dsptr out) { (void)in; (void)out; return 0; }
 int  joy_read_button(int p) { (void)p; return 0; }
 int  joy_read_axis(int p, int *t) { (void)p; (void)t; return 0; }
 int  mouse_read(int *b, int *dx, int *dy) { (void)b; (void)dx; (void)dy; return 0; }
-void speaker_tone(int freq) { g_spk_freq = (freq > 0) ? freq : 0; }
+void speaker_tone(int freq)
+{
+    /* Host voicing (the decompiled game still faithfully calls sound(5000)):
+     * amplitude-modulating a 5 kHz square adds a low buzz that reads a touch
+     * flat, so nudge high tones up toward the DOS speaker's whistle pitch.
+     * The low side-out tone (100 Hz) is left exactly as the game sets it. */
+    if (freq >= SPK_WARBLE_MINFREQ)
+        freq = freq * SPK_WHISTLE_MUL_N / SPK_WHISTLE_MUL_D;
+    g_spk_freq = (freq > 0) ? freq : 0;
+}
 void speaker_off(void) { g_spk_freq = 0; g_spk_off_seq++; }
 
 /* ---- Layer 1 test harness: load the real AV.DAT and show every sprite. ---- */
