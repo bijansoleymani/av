@@ -33,13 +33,15 @@ void platform_shutdown(void);
 #define AUDIO_RATE 44100
 #define TWO_PI 6.283185307179586
 #define SPK_RELEASE 1800                  /* ~41 ms grace across one settle frame */
-#define SPK_AMP 9000
+#define SPK_AMP 9000                      /* whistle (additive-sine) amplitude    */
 #define SPK_H3 0.18                       /* 3rd-harmonic amplitude (soft square) */
 #define SPK_CHOP_HZ 65.0                  /* chop rate (measured ~65 Hz)          */
 #define SPK_CHOP_DUTY 0.66                /* fraction of each cycle at full level */
 #define SPK_CHOP_FLOOR 0.12               /* gate low level during the off phase  */
 #define SPK_GATE_RAMP 0.02                /* gate slew/sample (soft, click-free)  */
 #define SPK_CHOP_MINFREQ 1500             /* only tones above this are chopped    */
+#define SPK_SQ_AMP 8000                   /* side-out (plain square) amplitude    */
+#define SPK_LP_A 0.457                    /* one-pole low-pass for the side-out    */
 static SDL_AudioDeviceID g_audio;
 static volatile int g_spk_freq;           /* frequency set by sound(); 0 = none   */
 static volatile int g_spk_on;             /* 1 after sound(), 0 after nosound()    */
@@ -52,29 +54,37 @@ static void audio_cb(void *ud, Uint8 *stream, int len)
     Sint16 *out = (Sint16 *)stream;
     int n = len / (int)sizeof(Sint16), i;
     static int rel;                       /* release samples remaining            */
+    static double lp;                     /* low-pass state for the side-out tone */
     (void)ud;
     for (i = 0; i < n; i++) {
         int f, playing;
-        double s = 0.0, tgt = 1.0, d;
+        double s;
         if (g_spk_on) { rel = SPK_RELEASE; playing = 1; }   /* asserted */
         else if (rel > 0) { rel--; playing = 1; }           /* within release grace */
         else playing = 0;
         f = g_spk_freq;
-        if (playing && f > 0) {
-            double car = sin(TWO_PI * g_ph1);
+        if (playing && f > 0 && f >= SPK_CHOP_MINFREQ) {
+            /* WHISTLE: additive carrier (no aliasing) + smooth ~65 Hz chop */
+            double car = sin(TWO_PI * g_ph1), tgt = 1.0, d;
             g_ph1 += (double)f / AUDIO_RATE; if (g_ph1 >= 1.0) g_ph1 -= 1.0;
-            if (3.0 * f < AUDIO_RATE * 0.5) {               /* add 3rd if in band */
-                car += SPK_H3 * sin(TWO_PI * g_ph3);
-                g_ph3 += 3.0 * (double)f / AUDIO_RATE; if (g_ph3 >= 1.0) g_ph3 -= 1.0;
-            }
-            if (f >= SPK_CHOP_MINFREQ && g_choph >= SPK_CHOP_DUTY)
-                tgt = SPK_CHOP_FLOOR;                        /* chop off-phase */
+            car += SPK_H3 * sin(TWO_PI * g_ph3);
+            g_ph3 += 3.0 * (double)f / AUDIO_RATE; if (g_ph3 >= 1.0) g_ph3 -= 1.0;
+            if (g_choph >= SPK_CHOP_DUTY) tgt = SPK_CHOP_FLOOR;
+            d = tgt - g_gate;
+            if (d >  SPK_GATE_RAMP) d =  SPK_GATE_RAMP;
+            if (d < -SPK_GATE_RAMP) d = -SPK_GATE_RAMP;
+            g_gate += d;
             s = SPK_AMP * car * g_gate;
+        } else {
+            /* SIDE-OUT and all other tones: plain low-passed square (as before) */
+            double raw = 0.0;
+            if (playing && f > 0) {
+                raw = (g_ph1 < 0.5) ? (double)SPK_SQ_AMP : -(double)SPK_SQ_AMP;
+                g_ph1 += (double)f / AUDIO_RATE; if (g_ph1 >= 1.0) g_ph1 -= 1.0;
+            }
+            lp = (1.0 - SPK_LP_A) * raw + SPK_LP_A * lp;
+            s = lp;
         }
-        d = tgt - g_gate;                                    /* slew the gate */
-        if (d >  SPK_GATE_RAMP) d =  SPK_GATE_RAMP;
-        if (d < -SPK_GATE_RAMP) d = -SPK_GATE_RAMP;
-        g_gate += d;
         g_choph += SPK_CHOP_HZ / AUDIO_RATE; if (g_choph >= 1.0) g_choph -= 1.0;
         if (s >  32767.0) s =  32767.0;
         if (s < -32767.0) s = -32767.0;
