@@ -100,8 +100,8 @@ L_bc3:
         ax = 0;                                     /* 0xbd8: xor ax,ax */
         goto L_be8;                                 /* jmp 0xbe8 */
     }
-    /* 0xbdc..0xbe5: quit_flag = W(0x15e) ^ 1 ; return 1 */
-    quit_flag = W(0x15e) ^ 1;                       /* 0xbdc..0xbe2 */
+    /* 0xbdc..0xbe5: sound_on = W(0x15e) ^ 1 ; return 1 */
+    sound_on = W(0x15e) ^ 1;                       /* 0xbdc..0xbe2 */
     ax = 1;                                         /* 0xbe5 */
 
 L_be8:

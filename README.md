@@ -96,10 +96,11 @@ build/                disassembly, decoded sprites, screenshots (generated)
 ## Notes / limitations
 
 * Rendering, sprites, physics, menu and input are reproduced from the binary and
-  the original `AV.DAT`. Text uses an 8×8 host font (the original used the BGI
-  ROM font); glyph shapes are approximate, content is exact.
-* PC‑speaker sound is currently silent (stubbed in `platform.c`); the `sound()`/
-  `nosound()` call sites are decompiled and in place.
+  the original `AV.DAT`. Text uses a hand‑authored 8×8 bitmap font in the IBM/BGI
+  style (`tools/genfont.py` → `src/font8x8.h`); content is exact.
+* PC‑speaker sound is emulated as an SDL square‑wave device (`platform.c`),
+  driven by the decompiled `sound()`/`nosound()` call sites and gated by the
+  "Sound On/Off" menu item.
 * A couple of decompiled locals are unused ("set but not used") — those are dead
   stores present in the original, kept for fidelity.
 * Run from this directory so `AV.DAT` is found.

@@ -189,14 +189,21 @@ int load_data(void)
         preshift_sprite((dsptr)(0x966 + si * 8));
     }
 
-    /* capture a filled 0x70x7 bar as the "clear strip" used to blank menu text */
+    /* Capture the "clear strip" used to blank a line of menu/score text, exactly
+     * as the original (0x5aa..0x63e): fill a white bar, snapshot it into font_img
+     * (used only for its width/height when erasing), erase it, then RESET the
+     * fill colour to black and blank the strip.  That final setfillstyle(1,0) is
+     * what leaves the BGI fill colour black for later bar() score clears. */
     bgi_setfillstyle(1, 0xf);
     {
         uint16_t sz = bgi_imagesize(0, 0, 0x70, 7);
-        bgi_bar(0, 0, 0x70, 7);
         font_img = dos_malloc(sz);
+        wait_vsync();
+        bgi_bar(0, 0, 0x70, 7);
         bgi_getimage(0, 0, 0x70, 7, font_img);
-        /* (original then re-blanks and captures a background strip; harmless) */
+        draw_sprite2(0, 0, font_img);
+        bgi_setfillstyle(1, 0);          /* leaves the fill colour BLACK */
+        bgi_bar(0, 0, 0x70, 7);
     }
     return 1;
 }

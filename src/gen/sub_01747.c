@@ -102,7 +102,7 @@ L1799:
 
     sub_01121();                            /* 017ed: call 0x1121 */
 
-    if (quit_flag != 0) {                   /* 017f0: cmp [0x24e],0 ; je 0x1811 */
+    if (sound_on != 0) {                   /* 017f0: cmp [0x24e],0 ; je 0x1811 */
         if (si == W(0xa14)) {               /* 017f7: cmp si,[0xa14] ; jne 0x1808 */
             sub_04b2b(0x1388);              /* 017fd-01801 */
         } else {
@@ -149,14 +149,14 @@ L1799:
         }
         /* jmp 0x190d */
     } else {
-        /* 018bf: winning side changed - relabel the two score headers */
-        bgi_settextstyle_dir(0);             /* 018bf-018c2: lib_6b04(0) */
-        /* lib_6129( (1-si)*0xe6 + 0x23, 3, 1 ) -> outtextxy(x, y=3, str=1) */
-        bgi_outtextxy((int)(unsigned short)((unsigned)(1 - si) * 0xe6u) + 0x23,
-                      3, 1);                  /* 018c9-018df */
-        bgi_settextstyle_dir(0xf);            /* 018e7-018eb: lib_6b04(0xf) */
-        /* lib_6129( loca + 0xfffb, 3, 1 ) ; 0xfffb == -5 */
-        bgi_outtextxy((int)(short)(loca + 0xfffb), 3, 1); /* 018f2-01901 */
+        /* 018bf: winning side changed - move the small "serving side" dot.
+         * lib_6b04(c) sets the draw colour (0 = erase, 0xf = white), and
+         * lib_6129(x,y,r) draws a filled dot of radius r there. */
+        bgi_setcolor(0);                     /* 018bf-018c2: lib_6b04(0)  -> erase */
+        bgi_fillellipse((int)(unsigned short)((unsigned)(1 - si) * 0xe6u) + 0x23,
+                        3, 1, 1);            /* 018c9-018df: erase old dot */
+        bgi_setcolor(3);                     /* 018e7-018eb: lib_6b04(0xf) -> white */
+        bgi_fillellipse((int)(short)(loca + 0xfffb), 3, 1, 1); /* 018f2-01901: new dot */
         W(0xa14) = si;                        /* 01909 */
         /* fall through to 0x190d */
     }

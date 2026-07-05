@@ -10,3 +10,6 @@
 # python venv used by the reverse-engineering tools
 /.venv/
 __pycache__/
+
+# editor swap files
+*.swp

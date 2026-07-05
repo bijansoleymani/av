@@ -37,7 +37,7 @@ int game_main(void)
 	if (load_data() == 0)                   /* 001f9/001fc or ax,ax ; 001fe jne */
 		goto L2f5;                      /* 00200 jmp 0x2f5 */
 
-	quit_flag = 0;                          /* 00205 [0x24e]=0 */
+	sound_on = 0;                          /* 00205 [0x24e]=0 */
 	side_swap = 0;                          /* 00208 [0x9d8]=0 */
 
 	if (sub_300() != 0)                     /* 0020b/0020e or ax,ax ; 00210 jne */

@@ -46,7 +46,7 @@ extern unsigned char VIDEO[0x4000];  /* CGA 0xB800 segment, 16 KB          */
 #define dat_fd     W(0xa50)     /* AV.DAT file handle                        */
 #define joy_timeout W(0xa42)
 #define joy_val    W(0xa44)
-#define quit_flag  W(0x24e)
+#define sound_on   W(0x24e)
 
 /* sprite-pointer globals just hold dsptr values, addressed like any other
  * word global (e.g. W(0x994 + frame*8 + shift*2)); nothing special needed. */
@@ -79,6 +79,7 @@ void    bgi_settextstyle_dir(int dir);           /* lib_6b04: text direction    
 void    bgi_setcolor(int c);                     /* lib_6129 helper              */
 void    bgi_cleardevice(void);                   /* lib_5d80                     */
 void    bgi_rectangle(int x1, int y1, int x2, int y2); /* lib_5fca               */
+void    bgi_fillellipse(int x, int y, int xr, int yr); /* lib_6129 (serve dot)    */
 void    registerbgidriver(void);                 /* no-op                        */
 
 /* ---- the game's own primitives (decompiled in game.c) ---- */

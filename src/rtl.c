@@ -9,20 +9,22 @@
 /* ---- key queue: each entry is a BIOS keystroke = (scancode<<8)|ascii ---- */
 #define QN 64
 static int q[QN], qh, qt;
+static int pending_scan = 0;    /* getch() holds an extended-key scancode here */
 void rtl_push_key(int biosval) { int n=(qt+1)%QN; if (n!=qh){ q[qt]=biosval; qt=n; } }
 static int q_empty(void) { return qh==qt; }
 static int q_pop(void) { int v=q[qh]; qh=(qh+1)%QN; return v; }
 
-/* 0x0432b — kbhit(): DOS AH=0Bh -> AL=0xFF if a key waits, else 0 (cwde). */
+/* 0x0432b — kbhit(): DOS AH=0Bh -> AL=0xFF if a key waits, else 0 (cwde).
+ * A key "waits" if the queue is non-empty OR getch left an extended-key
+ * scancode pending (otherwise the second half of an arrow key is lost). */
 int sub_0432b(void)
 {
     platform_pump();
-    return q_empty() ? 0 : -1;
+    return (pending_scan || !q_empty()) ? -1 : 0;
 }
 
 /* 0x04104 — getch(): DOS AH=07h -> AL = character (or 0 then scancode for
  * extended keys, classic two-read behaviour). Blocks (pumping the host). */
-static int pending_scan = 0;
 int sub_04104(void)
 {
     int v, ascii;

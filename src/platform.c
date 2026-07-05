@@ -12,6 +12,27 @@
 #define SCALE 3
 
 void platform_shutdown(void);
+
+/* ---- PC-speaker emulation: a square-wave SDL audio device ---- */
+#define AUDIO_RATE 44100
+static SDL_AudioDeviceID g_audio;
+static volatile int g_tone_freq;      /* Hz; 0 = silent */
+static double g_phase;
+
+static void audio_cb(void *ud, Uint8 *stream, int len)
+{
+    Sint16 *out = (Sint16 *)stream;
+    int n = len / (int)sizeof(Sint16), i, f = g_tone_freq;
+    double inc;
+    (void)ud;
+    if (f <= 0) { SDL_memset(stream, 0, len); g_phase = 0.0; return; }
+    inc = (double)f / AUDIO_RATE;
+    for (i = 0; i < n; i++) {
+        out[i] = (g_phase < 0.5) ? (Sint16)5000 : (Sint16)-5000;  /* square wave */
+        g_phase += inc; if (g_phase >= 1.0) g_phase -= 1.0;
+    }
+}
+
 static SDL_Window   *g_win;
 static SDL_Renderer *g_ren;
 static SDL_Texture  *g_tex;
@@ -113,7 +134,15 @@ static void present(void)
 
 void cga_init(void)
 {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); exit(1); }
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); exit(1); }
+    {
+        SDL_AudioSpec want, have;
+        SDL_zero(want);
+        want.freq = AUDIO_RATE; want.format = AUDIO_S16SYS;
+        want.channels = 1; want.samples = 512; want.callback = audio_cb;
+        g_audio = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+        if (g_audio) SDL_PauseAudioDevice(g_audio, 0);   /* start (silent) */
+    }
     g_win = SDL_CreateWindow("Arcade Volleyball (1988) — reconstructed",
                              SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                              SCRW * SCALE, SCRH * SCALE, SDL_WINDOW_SHOWN);
@@ -141,7 +170,7 @@ void platform_pump(void)
     SDL_Event e;
     present();
     while (SDL_PollEvent(&e)) {
-        if (e.type == SDL_QUIT) { g_quit = 1; W(0x9d4) = 1; W(quit_flag) = 1; }
+        if (e.type == SDL_QUIT) { g_quit = 1; W(0x9d4) = 1; }
         else if (e.type == SDL_KEYDOWN && !e.key.repeat) {
             int xt = xt_from_sdl(e.key.keysym.scancode);
             int sym = e.key.keysym.sym, ascii = 0;
@@ -169,7 +198,7 @@ void platform_delay(int ms)
     while ((int)(SDL_GetTicks() - t0) < ms) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) { g_quit = 1; W(0x9d4) = 1; W(quit_flag) = 1; }
+            if (e.type == SDL_QUIT) { g_quit = 1; W(0x9d4) = 1; }
             else if (e.type == SDL_KEYDOWN && !e.key.repeat) {
                 int xt = xt_from_sdl(e.key.keysym.scancode);
                 if (xt) av_kbd_scancode((unsigned char)xt);
@@ -187,8 +216,8 @@ int  platform_int33(dsptr in, dsptr out) { (void)in; (void)out; return 0; }
 int  joy_read_button(int p) { (void)p; return 0; }
 int  joy_read_axis(int p, int *t) { (void)p; (void)t; return 0; }
 int  mouse_read(int *b, int *dx, int *dy) { (void)b; (void)dx; (void)dy; return 0; }
-void speaker_tone(int d) { (void)d; }
-void speaker_off(void) { }
+void speaker_tone(int freq) { g_tone_freq = (freq > 0) ? freq : 0; }
+void speaker_off(void) { g_tone_freq = 0; }
 
 /* ---- Layer 1 test harness: load the real AV.DAT and show every sprite. ---- */
 #ifdef RENDER_TEST

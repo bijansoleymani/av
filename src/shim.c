@@ -125,6 +125,18 @@ void bgi_rectangle(int x1, int y1, int x2, int y2)
     for (y = y1; y <= y2; y++) { video_put_pixel(x1, y, g_color); video_put_pixel(x2, y, g_color); }
 }
 
+/* filled ellipse in the current draw colour (used for the serving-side dot). */
+void bgi_fillellipse(int x, int y, int xr, int yr)
+{
+    int dx, dy;
+    if (xr < 1) xr = 1;
+    if (yr < 1) yr = 1;
+    for (dy = -yr; dy <= yr; dy++)
+        for (dx = -xr; dx <= xr; dx++)
+            if (dx * dx * yr * yr + dy * dy * xr * xr <= xr * xr * yr * yr)
+                video_put_pixel(x + dx, y + dy, g_color);
+}
+
 /* BGI 8x8 bitmapped text (default font). */
 void bgi_outtextxy(int x, int y, dsptr s)
 {
