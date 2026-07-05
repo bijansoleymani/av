@@ -26,7 +26,13 @@ void platform_shutdown(void);
 #define SPK_RELEASE 1800                  /* ~41 ms grace: spans one settle frame
                                              so per-frame nosound()/sound() stays
                                              continuous; also the tone's tail      */
-#define SPK_AMP 6000
+#define SPK_AMP 8000
+#define SPK_LP_A 0.457                    /* one-pole low-pass, ~5.5 kHz cutoff.
+                                             The real DOS speaker/recording rolls
+                                             the square's 3rd harmonic (15 kHz)
+                                             down to ~0.18 of the fundamental; a
+                                             raw square is 0.33 (too bright). This
+                                             filter matches the measured timbre.   */
 static SDL_AudioDeviceID g_audio;
 static volatile int g_spk_freq;           /* frequency set by sound(); 0 = none   */
 static volatile int g_spk_on;             /* 1 after sound(), 0 after nosound()    */
@@ -37,20 +43,24 @@ static void audio_cb(void *ud, Uint8 *stream, int len)
     Sint16 *out = (Sint16 *)stream;
     int n = len / (int)sizeof(Sint16), i;
     static int rel;                       /* release samples remaining            */
+    static double lp;                     /* low-pass filter state                */
     (void)ud;
     for (i = 0; i < n; i++) {
         int f, playing;
+        double raw;
         if (g_spk_on) { rel = SPK_RELEASE; playing = 1; }   /* asserted */
         else if (rel > 0) { rel--; playing = 1; }           /* within release grace */
         else playing = 0;
         f = g_spk_freq;
         if (playing && f > 0) {
-            out[i] = (g_phase < 0.5) ? (Sint16)SPK_AMP : (Sint16)-SPK_AMP;
+            raw = (g_phase < 0.5) ? (double)SPK_AMP : (double)-SPK_AMP;
             g_phase += (double)f / AUDIO_RATE;
             if (g_phase >= 1.0) g_phase -= 1.0;
         } else {
-            out[i] = 0;
+            raw = 0.0;
         }
+        lp = (1.0 - SPK_LP_A) * raw + SPK_LP_A * lp;   /* soften harsh harmonics */
+        out[i] = (Sint16)lp;
     }
 }
 
