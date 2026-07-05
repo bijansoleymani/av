@@ -33,10 +33,19 @@ void platform_shutdown(void);
                                              down to ~0.18 of the fundamental; a
                                              raw square is 0.33 (too bright). This
                                              filter matches the measured timbre.   */
+/* The real point whistle is the 5 kHz tone gated fully on/off at ~65 Hz — the
+ * game's settle loop toggles nosound()/sound() once per CGA frame.  Our
+ * instantaneous physics can't recreate that gap, so synthesise the chop with a
+ * free-running LFO (measured from the recording: ~65 Hz, ~full depth).  Only
+ * the high whistle tone is chopped; the low side-out tone stays clean.          */
+#define SPK_CHOP_HZ 65.0
+#define SPK_CHOP_DUTY 0.55                /* fraction of each chop cycle sounding */
+#define SPK_CHOP_MINFREQ 1500
 static SDL_AudioDeviceID g_audio;
 static volatile int g_spk_freq;           /* frequency set by sound(); 0 = none   */
 static volatile int g_spk_on;             /* 1 after sound(), 0 after nosound()    */
 static double       g_phase;
+static double       g_choph;              /* chop LFO phase                       */
 
 static void audio_cb(void *ud, Uint8 *stream, int len)
 {
@@ -56,9 +65,13 @@ static void audio_cb(void *ud, Uint8 *stream, int len)
             raw = (g_phase < 0.5) ? (double)SPK_AMP : (double)-SPK_AMP;
             g_phase += (double)f / AUDIO_RATE;
             if (g_phase >= 1.0) g_phase -= 1.0;
+            if (f >= SPK_CHOP_MINFREQ && g_choph >= SPK_CHOP_DUTY)
+                raw = 0.0;                        /* ~65 Hz on/off chop = whistle */
         } else {
             raw = 0.0;
         }
+        g_choph += SPK_CHOP_HZ / AUDIO_RATE;
+        if (g_choph >= 1.0) g_choph -= 1.0;
         lp = (1.0 - SPK_LP_A) * raw + SPK_LP_A * lp;   /* soften harsh harmonics */
         out[i] = (Sint16)lp;
     }
