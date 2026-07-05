@@ -17,7 +17,7 @@ static int q_pop(void) { int v=q[qh]; qh=(qh+1)%QN; return v; }
 /* 0x0432b — kbhit(): DOS AH=0Bh -> AL=0xFF if a key waits, else 0 (cwde).
  * A key "waits" if the queue is non-empty OR getch left an extended-key
  * scancode pending (otherwise the second half of an arrow key is lost). */
-int sub_0432b(void)
+int dos_kbhit(void)
 {
     platform_pump();
     return (pending_scan || !q_empty()) ? -1 : 0;
@@ -25,7 +25,7 @@ int sub_0432b(void)
 
 /* 0x04104 — getch(): DOS AH=07h -> AL = character (or 0 then scancode for
  * extended keys, classic two-read behaviour). Blocks (pumping the host). */
-int sub_04104(void)
+int dos_getch(void)
 {
     int v, ascii;
     if (pending_scan) { int s=pending_scan; pending_scan=0; return s; }
@@ -42,7 +42,7 @@ int sub_04104(void)
 
 /* 0x03c3b — bioskey(mode): INT 16h. mode 0 = wait, return AX=(scan<<8)|ascii.
  * mode 1 = peek, return 0 if none (else the key, left queued). */
-int sub_03c3b(int mode)
+int dos_bioskey(int mode)
 {
     if (mode == 1) {
         platform_pump();
@@ -58,20 +58,20 @@ int sub_03c3b(int mode)
 
 /* 0x03c21 — equipment word (INT 11h). We report no game adapter, so the game
  * skips joystick auto-calibration. */
-int sub_03c21(void) { return 0; }
+int dos_equipment(void) { return 0; }
 
 /* 0x04b2b — sound(freq): program the PC speaker. 0x04b57 — nosound(). */
-void sub_04b2b(int freq) { speaker_tone(freq); }
-void sub_04b57(void)     { speaker_off(); }
+void dos_sound(int freq) { speaker_tone(freq); }
+void dos_nosound(void)     { speaker_off(); }
 
 /* lib_5fca — BGI rectangle(x1,y1,x2,y2) (kept for any residual references). */
 void lib_5fca(int x1, int y1, int x2, int y2) { bgi_rectangle(x1, y1, x2, y2); }
 
 /* 0x03f7a — delay(ms): Turbo C millisecond delay (BIOS tick busy-wait). */
-void sub_03f7a(int ms) { extern void platform_delay(int ms); platform_delay(ms); }
+void dos_delay(int ms) { extern void platform_delay(int ms); platform_delay(ms); }
 
 /* 0x04439 — itoa(value, buf, radix): number -> string in DS[buf]; returns buf. */
-dsptr sub_04439(int value, dsptr buf, int radix)
+dsptr dos_itoa(int value, dsptr buf, int radix)
 {
     char tmp[24]; int i = 0, neg = 0; unsigned uv;
     if (radix == 10 && value < 0) { neg = 1; uv = (unsigned)(-(short)value); }

@@ -1,4 +1,4 @@
-/* 0x01cea sub_01cea - AI: steer paddle toward predicted ball landing / block spot */
+/* 0x01cea ai_track_ball - AI: steer paddle toward predicted ball landing / block spot */
 #include "dos.h"
 #include "game_protos.h"
 
@@ -15,7 +15,7 @@ static int abs16(int v)
     return (v < 0) ? (short)-v : v;
 }
 
-int sub_01cea(void)
+int ai_track_ball(void)
 {
     int serve_offset;   /* 5 - (hit_count % 10)      */
     int frames_to_net;  /* signed idiv result [bp-6] */

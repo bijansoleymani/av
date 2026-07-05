@@ -1,8 +1,8 @@
-/* 0x013ca sub_013ca - draw edge/wall sprites when a clamped (x,y) point nears the four borders */
+/* 0x013ca draw_edge_sprites - draw edge/wall sprites when a clamped (x,y) point nears the four borders */
 #include "dos.h"
 #include "game_protos.h"
 
-int sub_013ca(int x, int y)
+int draw_edge_sprites(int x, int y)
 {
     /* Shift the point and clamp it into the playfield rectangle. The clamped
      * coordinates are where the border sprites get drawn; the unclamped x/y

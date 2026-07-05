@@ -1,8 +1,8 @@
-/* 0x0166f sub_0166f - redraw frame: erase old ball, draw both players, net box, and center sprite */
+/* 0x0166f redraw_frame - redraw frame: erase old ball, draw both players, net box, and center sprite */
 #include "dos.h"
 #include "game_protos.h"
 
-int sub_0166f(void)
+int redraw_frame(void)
 {
     wait_vsync();
 

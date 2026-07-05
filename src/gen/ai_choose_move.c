@@ -1,4 +1,4 @@
-/* 0x019f4 sub_019f4 - AI/serve target selection: choose paddle move and call collide_check */
+/* 0x019f4 ai_choose_move - AI/serve target selection: choose paddle move and call collide_check */
 #include "dos.h"
 #include "game_protos.h"
 
@@ -13,7 +13,7 @@
  *   W(0x9b8) - serve sub-step / one-shot latch used across serve states
  *   ctrl_jump(0) == W(0x9cc) - jump request for the left player
  */
-int sub_019f4(void)
+int ai_choose_move(void)
 {
     int result;                 /* mirrors AX at the ret: collide_check()'s value */
     int slack;                  /* 5 - (hit_count % 10): aim tolerance            */

@@ -1,11 +1,11 @@
-/* 0x00965 sub_00965 - format a value via sub_03c3b, draw its low byte as a
+/* 0x00965 capture_key - format a value via dos_bioskey, draw its low byte as a
  *                     1-char string at x=200,y=arg, return the high byte. */
 #include "dos.h"
 #include "game_protos.h"
 
 /* RTL helper at 0x3c3b (outside the decompiled game range); takes one int arg,
  * returns a 16-bit value in AX. Declared extern; provided elsewhere. */
-extern int sub_03c3b(int a0);
+extern int dos_bioskey(int a0);
 
 /* The original keeps a 2-byte string buffer on the stack (SS:[bp-2]).  Our
  * memory model only exposes DS[], and bgi_outtextxy() takes a dsptr, so we
@@ -13,7 +13,7 @@ extern int sub_03c3b(int a0);
  * DGROUP data/heap) to hold that buffer. */
 #define S965_BUF 0xfffcu
 
-int sub_00965(int y)
+int capture_key(int y)
 {
     dsptr buf = S965_BUF;
     int value;
@@ -22,7 +22,7 @@ int sub_00965(int y)
      * (0x0000) that lives at DS:0x2b0. */
     movedata_ds(0x2b0, buf, 2);
 
-    value = sub_03c3b(0);
+    value = dos_bioskey(0);
 
     /* Drop the low byte in as a single NUL-terminated character and draw it. */
     B(buf) = (unsigned char)(value & 0xff);

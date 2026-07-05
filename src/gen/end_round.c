@@ -1,4 +1,4 @@
-/* 0x01747 sub_01747 - end-of-round: settle the ball with a damped physics loop,
+/* 0x01747 end_round - end-of-round: settle the ball with a damped physics loop,
  *                     award/redraw the score for the winning side, then reset
  *                     all round state for the next serve. */
 #include "dos.h"
@@ -6,22 +6,22 @@
 
 /* RTL / library helpers reached by this function but living outside the
  * decompiled game range.  By usage:
- *   sub_04b57(void)              : sound/delay teardown (paired with sub_04b2b)
- *   sub_04b2b(int ms)            : delay(ms) busy-wait
- *   sub_04439(val,buf,radix)->buf: itoa-style number->string, returns buf ptr
- *   sub_03f7a(int ms)            : delay(ms) busy-wait (second timer)
+ *   dos_nosound(void)              : sound/delay teardown (paired with dos_sound)
+ *   dos_sound(int ms)            : delay(ms) busy-wait
+ *   dos_itoa(val,buf,radix)->buf: itoa-style number->string, returns buf ptr
+ *   dos_delay(int ms)            : delay(ms) busy-wait (second timer)
  * They are called by their sub name / mapped shim to stay faithful to the bytes.*/
-extern void  sub_04b57(void);
-extern void  sub_04b2b(int ms);
-extern dsptr sub_04439(int value, dsptr buf, int radix);
-extern void  sub_03f7a(int ms);
+extern void  dos_nosound(void);
+extern void  dos_sound(int ms);
+extern dsptr dos_itoa(int value, dsptr buf, int radix);
+extern void  dos_delay(int ms);
 
 /* The original keeps a small itoa scratch buffer on the stack at SS:[bp-4].
- * Our model only exposes DS[], and sub_04439/bgi_outtextxy take a dsptr, so we
+ * Our model only exposes DS[], and dos_itoa/bgi_outtextxy take a dsptr, so we
  * reserve a private scratch at the very top of DS (above DGROUP/heap). */
 #define S1747_BUF 0xfff8u
 
-int sub_01747(void)
+int end_round(void)
 {
     int winner;         /* winning side (0 = left, 1 = right)            */
     int vx_cap;         /* |ball_vx| >> 3  (x-velocity magnitude cap)    */
@@ -39,7 +39,7 @@ int sub_01747(void)
         winner = 1 - server;
     }
 
-    sub_01452();
+    render_frame();
 
     /* clamp targets: shrink the ball's velocity magnitude by a factor of 8 */
     vy_cap = ball_vy;
@@ -62,8 +62,8 @@ int sub_01747(void)
         ctrl_jump(1) = 0;   /* 0179b: W(0x9d2) */
         ctrl_jump(0) = 0;   /* 0179e: W(0x9cc) */
 
-        sub_04b57();
-        sub_00e7a();
+        dos_nosound();
+        update_players();
 
         /* clamp ball_vx magnitude to vx_cap, preserving sign */
         mag = ball_vx;
@@ -77,18 +77,18 @@ int sub_01747(void)
         if (mag > vy_cap)
             ball_vy = (ball_vy >= 0) ? vy_cap : -vy_cap;
 
-        sub_01121();
+        collide_players();
 
         if (sound_on != 0)
-            sub_04b2b(winner == lead_side ? 0x1388 : 0x64);
+            dos_sound(winner == lead_side ? 0x1388 : 0x64);
 
-        sub_01006();
-        sub_01452();
+        advance_ball();
+        render_frame();
     } while (settle_left-- > 0 ||
              player_state(0) != -1 || player_state(1) != -1);
 
     /* ================= award point / update display ================= */
-    sub_04b57();
+    dos_nosound();
 
     /* score strip x-coordinate for the winning side */
     score_x = (int)(unsigned short)((unsigned)winner * 0xe6u) + 0x28;
@@ -99,7 +99,7 @@ int sub_01747(void)
         bgi_bar(score_x, 0, score_x + 0xf, 7);
 
         score(winner) = score(winner) + 1;
-        buf = sub_04439(score(winner), S1747_BUF, 0xa);
+        buf = dos_itoa(score(winner), S1747_BUF, 0xa);
         bgi_outtextxy(score_x, 0, buf);
 
         /* game over at 15+ points with a 2-point lead */
@@ -118,8 +118,8 @@ int sub_01747(void)
         lead_side = winner;
     }
 
-    sub_03f7a(0x64);
-    sub_0166f();
+    dos_delay(0x64);
+    redraw_frame();
 
     /* ================= reset all round state for next serve ================= */
     mag = (int)(unsigned short)((unsigned)winner * 0xa5u) + 0x40;

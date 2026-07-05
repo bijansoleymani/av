@@ -4,8 +4,8 @@
 #include "game_protos.h"
 
 /* RTL helper at 0x4104 == getch() (blocking key read); result ignored here.
- * Declared extern; provided elsewhere (matches sub_0063f.c). */
-extern int sub_04104(void);
+ * Declared extern; provided elsewhere (matches idle_wait_key.c). */
+extern int dos_getch(void);
 
 int play_round(void)
 {
@@ -40,17 +40,17 @@ int play_round(void)
             /* Show the six score-digit strings, capturing each drawn strip
              * into the results table at W(0x9e..0xa2) / W(0xa4..0xa8). */
             bgi_outtextxy(0x68, 0x28, 0x2ed);
-            W(0x9e + 0) = sub_00965(0x28);
+            W(0x9e + 0) = capture_key(0x28);
             bgi_outtextxy(0x68, 0x30, 0x2fa);
-            W(0x9e + 2) = sub_00965(0x30);
+            W(0x9e + 2) = capture_key(0x30);
             bgi_outtextxy(0x68, 0x38, 0x307);
-            W(0x9e + 4) = sub_00965(0x38);
+            W(0x9e + 4) = capture_key(0x38);
             bgi_outtextxy(0x68, 0x40, 0x314);
-            W(0xa4 + 0) = sub_00965(0x40);
+            W(0xa4 + 0) = capture_key(0x40);
             bgi_outtextxy(0x68, 0x48, 0x321);
-            W(0xa4 + 2) = sub_00965(0x48);
+            W(0xa4 + 2) = capture_key(0x48);
             bgi_outtextxy(0x68, 0x50, 0x32e);
-            W(0xa4 + 4) = sub_00965(0x50);
+            W(0xa4 + 4) = capture_key(0x50);
 
             /* Erase the seven font strips just drawn. */
             for (i = 0; i < 7; i++)
@@ -60,7 +60,7 @@ int play_round(void)
         if (r == 5) {
             /* "Calibrate joystick" screen: prompt, wait for a key, calibrate. */
             bgi_outtextxy(0x28, 0x28, 0x33b);
-            sub_04104();                /* getch: wait for key */
+            dos_getch();                /* getch: wait for key */
             joy_calibrate();
 
             /* Erase the four font strips just drawn. */

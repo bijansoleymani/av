@@ -1,8 +1,8 @@
-/* 0x01121 sub_01121 - ball/player collision + wall/net bounce resolution */
+/* 0x01121 collide_players - ball/player collision + wall/net bounce resolution */
 #include "dos.h"
 #include "game_protos.h"
 
-int sub_01121(void)
+int collide_players(void)
 {
     int player;
     int dx_dist;            /* horizontal ball-to-player distance metric */

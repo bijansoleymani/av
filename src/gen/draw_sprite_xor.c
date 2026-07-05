@@ -1,4 +1,4 @@
-/* 0x0234e sub_0234e - XOR-blit a sprite into CGA video memory (draw_sprite via XOR) */
+/* 0x0234e draw_sprite_xor - XOR-blit a sprite into CGA video memory (draw_sprite via XOR) */
 #include "dos.h"
 #include "game_protos.h"
 
@@ -16,7 +16,7 @@
  *
  * Return value is the leftover AX (last sprite byte in the low half, row
  * counter in the high half); all callers ignore it. */
-int sub_0234e(int x, int y, int img)
+int draw_sprite_xor(int x, int y, int img)
 {
     unsigned dst;               /* VIDEO offset being written */
     unsigned src;              /* sprite data pointer (dsptr) */

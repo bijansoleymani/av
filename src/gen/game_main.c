@@ -3,7 +3,7 @@
 #include "game_protos.h"
 
 /* RTL-region routine at 0x3c21: gates joystick calibration (bit0 of AX). */
-extern int sub_03c21(void);
+extern int dos_equipment(void);
 
 int game_main(void)
 {
@@ -36,7 +36,7 @@ int game_main(void)
 
 	/* If no mouse driver, seed each side's control block from its defaults.
 	 * Per side (1..2): copy 14 bytes [0xd8..] -> [0xca..], then dec [0xac]. */
-	if (sub_300() == 0) {
+	if (detect_mouse() == 0) {
 		for (side = 1; side < 3; side++) {
 			idx = (unsigned short)(side * 0x3c);
 			for (col = 0; col < 0xe; col++)
@@ -47,7 +47,7 @@ int game_main(void)
 
 	/* If the joystick path is enabled and calibration succeeds (nonzero),
 	 * skip the keyboard-default seeding below. */
-	if (!((sub_03c21() & 1) && joy_calibrate() != 0)) {
+	if (!((dos_equipment() & 1) && joy_calibrate() != 0)) {
 		/* Per side (1..2): promote current -> active [0xca]->[0xbc], then
 		 * reload current from defaults [0xd8]->[0xca]; then dec [0xac]. */
 		for (side = 1; side < 3; side++) {
@@ -69,7 +69,7 @@ int game_main(void)
 	/* Run rounds until play_round() reports the match should stop; each round
 	 * runs the rally, then swaps ends. */
 	while (play_round() != 0) {
-		sub_02008();
+		play_match();
 		side_swap = side_swap ^ 1;
 	}
 

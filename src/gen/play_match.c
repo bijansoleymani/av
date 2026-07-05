@@ -1,4 +1,4 @@
-/* 0x02008 sub_02008 - play one match: reset per-side state, install the
+/* 0x02008 play_match - play one match: reset per-side state, install the
  *                     keyboard ISR, then run the input/physics/render loop until
  *                     the round terminates, restoring the vector on the way out. */
 #include "dos.h"
@@ -6,8 +6,8 @@
 
 /* Interrupt-vector helpers in the Turbo C RTL region (not part of the dumped
  * game code):
- *   sub_0413c == getvect(int)      -> old handler far ptr in DX:AX
- *   sub_0414c == setvect(int,ptr)  -> install handler
+ *   getvect == getvect(int)      -> old handler far ptr in DX:AX
+ *   setvect == setvect(int,ptr)  -> install handler
  * The getvect(9)/setvect(9, our_isr) pair at 0x21b9/0x21d0 installs the game's
  * INT 9 keyboard ISR (located at cs:0xc5d); the setvect(9, old) at 0x22a7
  * restores it.  Per the porting contract these are replaced with kb_install()
@@ -15,8 +15,8 @@
 extern void kb_install(void);
 
 /* RTL polling/blocking key helpers (same as elsewhere in the game). */
-extern int sub_0432b(void);   /* kbhit-style poll: AX nonzero when key waiting */
-extern int sub_04104(void);   /* getch-style blocking read (result discarded)  */
+extern int dos_kbhit(void);   /* kbhit-style poll: AX nonzero when key waiting */
+extern int dos_getch(void);   /* getch-style blocking read (result discarded)  */
 
 /* Per-player control kind decoded from the options menu (menu key char):
  * 0 = none, 1 = joystick, 2 = mouse, 3 = keyboard. */
@@ -30,7 +30,7 @@ static int decode_control(int menu_char)
     }
 }
 
-int sub_02008(void)
+int play_match(void)
 {
     int side;
     int frame_parity;   /* alternates 0/1 each frame (SI): gates mouse reads */
@@ -114,7 +114,7 @@ int sub_02008(void)
                 read_mouse(0);
             break;
         case 3:
-            sub_019f4();
+            ai_choose_move();
             break;
         }
 
@@ -128,39 +128,39 @@ int sub_02008(void)
                 read_mouse(1);
             break;
         case 3:
-            sub_01cea();
+            ai_track_ball();
             break;
         }
 
         frame_parity = 1 - frame_parity;
 
-        sub_00e7a();
+        update_players();
 
         /* Physics + render.  While a serve is pending (W(0xa4b)) run the step
          * unconditionally; otherwise only while the rally is still alive, and
-         * let sub_01006() report whether it continues. */
+         * let advance_ball() report whether it continues. */
         if (W(0xa4b) != 0) {
-            sub_01121();
-            sub_01452();
+            collide_players();
+            render_frame();
             alive = 1;
         } else if (alive != 0) {
-            sub_01121();
-            alive = sub_01006();
-            sub_01452();
+            collide_players();
+            alive = advance_ball();
+            render_frame();
         }
 
         /* Loop back unless the rally ended or the volley touch count spilled
          * past 2, in which case run the point-won handler first. */
         if (alive == 0 || touches > 2)
-            sub_01747();
+            end_round();
     }
 
     /* Post-round cleanup: redraw, restore INT 9 (no-op under SDL), then drain
      * the keyboard buffer. */
-    sub_0166f();
+    redraw_frame();
     /* setvect(9, old_vector) restore -> no-op */
-    while (sub_0432b() != 0)
-        sub_04104();   /* discard */
+    while (dos_kbhit() != 0)
+        dos_getch();   /* discard */
 
     return 0;
 }

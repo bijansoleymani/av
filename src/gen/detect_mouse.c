@@ -1,4 +1,4 @@
-/* 0x00300 sub_300 - detect mouse driver via INT 33h (AX=0 reset), then hide cursor (AX=2); return 1 if present else 0 */
+/* 0x00300 detect_mouse - detect mouse driver via INT 33h (AX=0 reset), then hide cursor (AX=2); return 1 if present else 0 */
 #include "dos.h"
 #include "game_protos.h"
 
@@ -7,7 +7,7 @@
  * with a fixed DS scratch region.  Only word 0 (the AX register) is used. */
 #define REG_BLK 0xffe0            /* 16-byte int86 register block in DS scratch */
 
-int sub_300(void)
+int detect_mouse(void)
 {
     dsptr r = REG_BLK;           /* lea ax,[bp-0x10] : &regs */
 

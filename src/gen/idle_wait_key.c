@@ -1,17 +1,17 @@
-/* 0x0063f sub_0063f - idle/serve animation loop; run frames until a key is hit, return that key char */
+/* 0x0063f idle_wait_key - idle/serve animation loop; run frames until a key is hit, return that key char */
 #include "dos.h"
 #include "game_protos.h"
 
 /* Turbo C console RTL pair used by this loop (not game/BGI functions):
- *   sub_0432b == kbhit()  -> AX nonzero when a key is waiting
- *   sub_04104 == getch()  -> AL = the key character                    */
-extern int sub_0432b(void);
-extern int sub_04104(void);
+ *   dos_kbhit == kbhit()  -> AX nonzero when a key is waiting
+ *   dos_getch == getch()  -> AL = the key character                    */
+extern int dos_kbhit(void);
+extern int dos_getch(void);
 
-int sub_0063f(void)
+int idle_wait_key(void)
 {
     /* Run the demo/serve animation one frame at a time until a key is pressed. */
-    while ((sub_0432b() & 0xffff) == 0) {
+    while ((dos_kbhit() & 0xffff) == 0) {
         hit_count = hit_count + 1;
 
         /* If the serving side is grounded (state -1), flip the serve: the old
@@ -22,7 +22,7 @@ int sub_0063f(void)
             ctrl_jump(server) = 1;
         }
 
-        sub_00e7a();                 /* advance ball physics */
+        update_players();                 /* advance ball physics */
 
         /* snapshot each player's X (0x98c/0x98e); these serve as the sprite X
          * coords, the sub-pixel shift (& 3), and the near-edge post tests below.
@@ -48,5 +48,5 @@ int sub_0063f(void)
         draw_sprite(0x9e, 0x67, net_sprite);
     }
 
-    return sub_04104();              /* getch -> key char */
+    return dos_getch();              /* getch -> key char */
 }

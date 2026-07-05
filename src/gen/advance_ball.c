@@ -1,8 +1,8 @@
-/* 0x01006 sub_01006 - advance ball one step: clamp velocity, integrate position, bounce off walls/net, return whether ball hit the floor region */
+/* 0x01006 advance_ball - advance ball one step: clamp velocity, integrate position, bounce off walls/net, return whether ball hit the floor region */
 #include "dos.h"
 #include "game_protos.h"
 
-int sub_01006(void)
+int advance_ball(void)
 {
     int vx = ball_vx;
     int vy = ball_vy;

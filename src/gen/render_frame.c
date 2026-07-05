@@ -1,11 +1,11 @@
-/* 0x01452 sub_01452 - per-frame render: erase/redraw ball spike trail, animate players and ball, draw net/scenery */
+/* 0x01452 render_frame - per-frame render: erase/redraw ball spike trail, animate players and ball, draw net/scenery */
 #include "dos.h"
 #include "game_protos.h"
 
 /* magnitude of a 16-bit difference, matching the binary's neg-on-a-16-bit-reg */
 static int abs16(short v) { return v < 0 ? -v : v; }
 
-int sub_01452(void)
+int render_frame(void)
 {
     short px0 = player_x(0);
     short px1 = player_x(1);
@@ -31,7 +31,7 @@ int sub_01452(void)
     } else if (hit) {
         draw_sprite2((short)(ball_prev_x - 4), (short)(ball_prev_y - 5),
                      ball_sprite(ball_frame, (short)(ball_prev_x - 4) & 3));
-        sub_013ca(ball_prev_x, ball_prev_y);
+        draw_edge_sprites(ball_prev_x, ball_prev_y);
     }
     ball_high = hit;
 
@@ -55,12 +55,12 @@ int sub_01452(void)
     /* Draw the ball at its current position: the small "high" ball if flagged
      * high, else the big ball at the -4,-5 offset. */
     if (ball_high) {
-        sub_0234e(ball_x, ball_y, smallball_sprite(ball_frame, ball_x & 3));
+        draw_sprite_xor(ball_x, ball_y, smallball_sprite(ball_frame, ball_x & 3));
     } else {
         draw_sprite((short)(ball_x - 4), (short)(ball_y - 5),
                     ball_sprite(ball_frame, (short)(ball_x - 4) & 3));
     }
-    sub_013ca(ball_x, ball_y);
+    draw_edge_sprites(ball_x, ball_y);
 
     /* Left/right court-edge markers when the ball is off the near edge. */
     if (px0 < 6)

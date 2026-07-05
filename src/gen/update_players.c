@@ -1,8 +1,8 @@
-/* 0x00e7a sub_00e7a - per-player: move/clamp player-x toward target, run spike/jump animation state machine */
+/* 0x00e7a update_players - per-player: move/clamp player-x toward target, run spike/jump animation state machine */
 #include "dos.h"
 #include "game_protos.h"
 
-int sub_00e7a(void)
+int update_players(void)
 {
     int player;
     int move;          /* control delta: left(-2/0) + right(+2/0)     */
