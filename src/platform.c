@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define SCRW 320
 #define SCRH 200
@@ -13,67 +14,71 @@
 
 void platform_shutdown(void);
 
-/* ---- PC-speaker emulation: a square-wave SDL audio device ----
+/* ---- PC-speaker emulation: SDL audio device ----
  *
  * The game drives the speaker with sound()/nosound() (speaker_tone/off).  The
- * real DOS point-scored sound is simply a clean, steady ~5 kHz tone held for the
- * ball-settle (~0.3 s) — verified by spectrum-analysing the actual game audio.
- * The catch: the settle loop calls nosound() at the top of every frame and
- * sound() again mid-frame, so a naive model chops the tone into clicks.  We
- * bridge those instantaneous re-asserts with a short release envelope, giving a
- * continuous glitch-free tone that stops only when nosound() is left un-renewed. */
+ * real DOS point whistle, verified against a spectrogram of the actual game
+ * audio, is: a ~5 kHz tone (fundamental + a weak 3rd harmonic at 0.18 — a soft
+ * square, not a bright one) GATED on/off at ~65 Hz.  That gating is the settle
+ * loop toggling nosound()/sound() once per CGA frame; it shows up as evenly
+ * spaced vertical "stripes" in the spectrogram and is what makes it sound like a
+ * whistle rather than a flat beep.
+ *
+ * We synthesise the carrier additively (fundamental + 3rd sine) so there is NO
+ * aliasing — a naive square's high harmonics fold back and smear the spectrum,
+ * which is what made earlier attempts sound wrong.  The chop is a free-running
+ * ~65 Hz LFO with smoothly-ramped edges (a hard gate clicks and re-fills the
+ * spectrum).  Only the high whistle tone is chopped; the low side-out tone
+ * (sound(100)) is left clean.  A short release bridges the per-frame re-assert. */
 #define AUDIO_RATE 44100
-#define SPK_RELEASE 1800                  /* ~41 ms grace: spans one settle frame
-                                             so per-frame nosound()/sound() stays
-                                             continuous; also the tone's tail      */
-#define SPK_AMP 8000
-#define SPK_LP_A 0.457                    /* one-pole low-pass, ~5.5 kHz cutoff.
-                                             The real DOS speaker/recording rolls
-                                             the square's 3rd harmonic (15 kHz)
-                                             down to ~0.18 of the fundamental; a
-                                             raw square is 0.33 (too bright). This
-                                             filter matches the measured timbre.   */
-/* The real point whistle is the 5 kHz tone gated fully on/off at ~65 Hz — the
- * game's settle loop toggles nosound()/sound() once per CGA frame.  Our
- * instantaneous physics can't recreate that gap, so synthesise the chop with a
- * free-running LFO (measured from the recording: ~65 Hz, ~full depth).  Only
- * the high whistle tone is chopped; the low side-out tone stays clean.          */
-#define SPK_CHOP_HZ 65.0
-#define SPK_CHOP_DUTY 0.55                /* fraction of each chop cycle sounding */
-#define SPK_CHOP_MINFREQ 1500
+#define TWO_PI 6.283185307179586
+#define SPK_RELEASE 1800                  /* ~41 ms grace across one settle frame */
+#define SPK_AMP 9000
+#define SPK_H3 0.18                       /* 3rd-harmonic amplitude (soft square) */
+#define SPK_CHOP_HZ 65.0                  /* chop rate (measured ~65 Hz)          */
+#define SPK_CHOP_DUTY 0.66                /* fraction of each cycle at full level */
+#define SPK_CHOP_FLOOR 0.12               /* gate low level during the off phase  */
+#define SPK_GATE_RAMP 0.02                /* gate slew/sample (soft, click-free)  */
+#define SPK_CHOP_MINFREQ 1500             /* only tones above this are chopped    */
 static SDL_AudioDeviceID g_audio;
 static volatile int g_spk_freq;           /* frequency set by sound(); 0 = none   */
 static volatile int g_spk_on;             /* 1 after sound(), 0 after nosound()    */
-static double       g_phase;
+static double       g_ph1, g_ph3;         /* fundamental / 3rd-harmonic phase     */
 static double       g_choph;              /* chop LFO phase                       */
+static double       g_gate = 1.0;         /* smoothed chop gate                   */
 
 static void audio_cb(void *ud, Uint8 *stream, int len)
 {
     Sint16 *out = (Sint16 *)stream;
     int n = len / (int)sizeof(Sint16), i;
     static int rel;                       /* release samples remaining            */
-    static double lp;                     /* low-pass filter state                */
     (void)ud;
     for (i = 0; i < n; i++) {
         int f, playing;
-        double raw;
+        double s = 0.0, tgt = 1.0, d;
         if (g_spk_on) { rel = SPK_RELEASE; playing = 1; }   /* asserted */
         else if (rel > 0) { rel--; playing = 1; }           /* within release grace */
         else playing = 0;
         f = g_spk_freq;
         if (playing && f > 0) {
-            raw = (g_phase < 0.5) ? (double)SPK_AMP : (double)-SPK_AMP;
-            g_phase += (double)f / AUDIO_RATE;
-            if (g_phase >= 1.0) g_phase -= 1.0;
+            double car = sin(TWO_PI * g_ph1);
+            g_ph1 += (double)f / AUDIO_RATE; if (g_ph1 >= 1.0) g_ph1 -= 1.0;
+            if (3.0 * f < AUDIO_RATE * 0.5) {               /* add 3rd if in band */
+                car += SPK_H3 * sin(TWO_PI * g_ph3);
+                g_ph3 += 3.0 * (double)f / AUDIO_RATE; if (g_ph3 >= 1.0) g_ph3 -= 1.0;
+            }
             if (f >= SPK_CHOP_MINFREQ && g_choph >= SPK_CHOP_DUTY)
-                raw = 0.0;                        /* ~65 Hz on/off chop = whistle */
-        } else {
-            raw = 0.0;
+                tgt = SPK_CHOP_FLOOR;                        /* chop off-phase */
+            s = SPK_AMP * car * g_gate;
         }
-        g_choph += SPK_CHOP_HZ / AUDIO_RATE;
-        if (g_choph >= 1.0) g_choph -= 1.0;
-        lp = (1.0 - SPK_LP_A) * raw + SPK_LP_A * lp;   /* soften harsh harmonics */
-        out[i] = (Sint16)lp;
+        d = tgt - g_gate;                                    /* slew the gate */
+        if (d >  SPK_GATE_RAMP) d =  SPK_GATE_RAMP;
+        if (d < -SPK_GATE_RAMP) d = -SPK_GATE_RAMP;
+        g_gate += d;
+        g_choph += SPK_CHOP_HZ / AUDIO_RATE; if (g_choph >= 1.0) g_choph -= 1.0;
+        if (s >  32767.0) s =  32767.0;
+        if (s < -32767.0) s = -32767.0;
+        out[i] = (Sint16)s;
     }
 }
 
