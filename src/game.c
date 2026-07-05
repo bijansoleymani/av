@@ -19,7 +19,7 @@
  * natural place to present the framebuffer and pace/poll the host. */
 void wait_vsync(void)
 {
-    platform_pump();
+    platform_frame();          /* 60 Hz-paced: one deterministic game speed */
 }
 
 /* 0x022d0 — draw_sprite(x,y,img): copy a pre-shifted CGA sprite to VIDEO.

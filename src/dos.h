@@ -101,6 +101,7 @@ void    speaker_off(void);
 
 /* platform frame pump / timing */
 void    platform_pump(void);                     /* poll SDL, present VIDEO       */
+void    platform_frame(void);                    /* present + poll + 60 Hz pace   */
 int     platform_should_quit(void);
 void    rtl_push_key(int biosval);               /* enqueue (scancode<<8)|ascii   */
 

@@ -206,7 +206,9 @@ void cga_init(void)
                              SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                              SCRW * SCALE, SCRH * SCALE, SDL_WINDOW_SHOWN);
     if (g_win) {
-        g_ren = SDL_CreateRenderer(g_win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+        /* No PRESENTVSYNC: timing is governed by platform_frame()'s 60 Hz limiter
+         * so the game speed is identical regardless of the display's refresh. */
+        g_ren = SDL_CreateRenderer(g_win, -1, SDL_RENDERER_ACCELERATED);
         if (!g_ren) g_ren = SDL_CreateRenderer(g_win, -1, SDL_RENDERER_SOFTWARE);
     }
     if (g_ren)
@@ -224,10 +226,16 @@ void platform_shutdown(void)
 
 extern int xt_from_sdl(int sdl_scancode);
 
-void platform_pump(void)
+/* ~60 Hz: the original synced its game loop to the CGA vertical retrace.  We
+ * pace wait_vsync() to this so the game runs at one deterministic speed on every
+ * machine (previously it followed the display's vsync / SDL_Delay and so ran
+ * faster or slower depending on the platform). */
+#define GAME_FPS 60.0
+#define FRAME_MS (1000.0 / GAME_FPS)
+
+static void poll_events(void)
 {
     SDL_Event e;
-    present();
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_QUIT) { g_quit = 1; W(0x9d4) = 1; }
         else if (e.type == SDL_KEYDOWN && !e.key.repeat) {
@@ -244,7 +252,29 @@ void platform_pump(void)
             if (xt) av_kbd_scancode((unsigned char)(xt | 0x80));
         }
     }
-    SDL_Delay(8);
+}
+
+/* Frame sync (wait_vsync): present, poll, and sleep until the next 1/60 s slot. */
+void platform_frame(void)
+{
+    static double next = 0.0;
+    Uint32 now;
+    present();
+    poll_events();
+    now = SDL_GetTicks();
+    if (next == 0.0 || next < (double)now - 100.0) next = now;   /* init / resync */
+    next += FRAME_MS;
+    if (next > (double)now) SDL_Delay((Uint32)(next - now));
+}
+
+/* Light pump for the menu's kbhit/getch busy-waits: poll without frame-limiting
+ * (a small sleep keeps CPU/present load sane); the frame rate is governed by
+ * platform_frame() at the actual wait_vsync sync points. */
+void platform_pump(void)
+{
+    present();
+    poll_events();
+    SDL_Delay(3);
 }
 int platform_should_quit(void) { return g_quit; }
 
@@ -255,17 +285,7 @@ void platform_delay(int ms)
     present();
     t0 = SDL_GetTicks();
     while ((int)(SDL_GetTicks() - t0) < ms) {
-        SDL_Event e;
-        while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) { g_quit = 1; W(0x9d4) = 1; }
-            else if (e.type == SDL_KEYDOWN && !e.key.repeat) {
-                int xt = xt_from_sdl(e.key.keysym.scancode);
-                if (xt) av_kbd_scancode((unsigned char)xt);
-            } else if (e.type == SDL_KEYUP) {
-                int xt = xt_from_sdl(e.key.keysym.scancode);
-                if (xt) av_kbd_scancode((unsigned char)(xt | 0x80));
-            }
-        }
+        poll_events();
         SDL_Delay(2);
     }
 }

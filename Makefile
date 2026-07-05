@@ -1,7 +1,7 @@
 # Arcade Volleyball (1988) — reconstructed from AV.EXE / AV.DAT
 CC      = cc
 CFLAGS  = -std=c99 -O2 -g -Wall -Wextra -Wno-unused-parameter -Isrc $(shell sdl2-config --cflags)
-LDFLAGS = $(shell sdl2-config --libs)
+LDFLAGS = $(shell sdl2-config --libs) -lm
 SRC     = src/dos.c src/shim.c src/game.c src/input.c src/rtl.c src/platform.c $(wildcard src/gen/*.c)
 OBJ     = $(SRC:.c=.o)
 
