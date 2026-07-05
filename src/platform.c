@@ -13,23 +13,42 @@
 
 void platform_shutdown(void);
 
-/* ---- PC-speaker emulation: a square-wave SDL audio device ---- */
+/* ---- PC-speaker emulation: a square-wave SDL audio device ----
+ *
+ * The game drives the speaker with sound()/nosound() (speaker_tone/off).  During
+ * the point-scored settle loop it calls nosound() at the top of every frame and
+ * sound() again mid-frame, so on real hardware the ~5 kHz tone was chopped ~60
+ * times a second (the brief per-frame gap while physics ran) — that amplitude
+ * modulation is what gives the score sound its warbly "whistle" timbre.  Our C
+ * physics is instantaneous, so we reproduce that chop explicitly: every
+ * speaker_off() forces a short silence even if a tone restarts immediately. */
 #define AUDIO_RATE 44100
+#define SPK_GAP_SAMPLES 120               /* ~2.7 ms forced silence per off()   */
+#define SPK_AMP 6500
 static SDL_AudioDeviceID g_audio;
-static volatile int g_tone_freq;      /* Hz; 0 = silent */
-static double g_phase;
+static volatile int      g_spk_freq;      /* current tone frequency, 0 = off     */
+static volatile unsigned g_spk_off_seq;   /* bumped on every speaker_off()        */
+static unsigned          g_spk_seen_seq;  /* audio thread's last-seen off count   */
+static int               g_spk_gap;       /* forced-silence samples remaining     */
+static double            g_phase;
 
 static void audio_cb(void *ud, Uint8 *stream, int len)
 {
     Sint16 *out = (Sint16 *)stream;
-    int n = len / (int)sizeof(Sint16), i, f = g_tone_freq;
-    double inc;
+    int n = len / (int)sizeof(Sint16), i;
     (void)ud;
-    if (f <= 0) { SDL_memset(stream, 0, len); g_phase = 0.0; return; }
-    inc = (double)f / AUDIO_RATE;
     for (i = 0; i < n; i++) {
-        out[i] = (g_phase < 0.5) ? (Sint16)5000 : (Sint16)-5000;  /* square wave */
-        g_phase += inc; if (g_phase >= 1.0) g_phase -= 1.0;
+        int f;
+        if (g_spk_off_seq != g_spk_seen_seq) {      /* a new nosound() happened */
+            g_spk_seen_seq = g_spk_off_seq;
+            g_spk_gap = SPK_GAP_SAMPLES;
+        }
+        if (g_spk_gap > 0) { out[i] = 0; g_spk_gap--; g_phase = 0.0; continue; }
+        f = g_spk_freq;
+        if (f <= 0) { out[i] = 0; g_phase = 0.0; continue; }
+        out[i] = (g_phase < 0.5) ? (Sint16)SPK_AMP : (Sint16)-SPK_AMP;
+        g_phase += (double)f / AUDIO_RATE;
+        if (g_phase >= 1.0) g_phase -= 1.0;
     }
 }
 
@@ -216,8 +235,8 @@ int  platform_int33(dsptr in, dsptr out) { (void)in; (void)out; return 0; }
 int  joy_read_button(int p) { (void)p; return 0; }
 int  joy_read_axis(int p, int *t) { (void)p; (void)t; return 0; }
 int  mouse_read(int *b, int *dx, int *dy) { (void)b; (void)dx; (void)dy; return 0; }
-void speaker_tone(int freq) { g_tone_freq = (freq > 0) ? freq : 0; }
-void speaker_off(void) { g_tone_freq = 0; }
+void speaker_tone(int freq) { g_spk_freq = (freq > 0) ? freq : 0; }
+void speaker_off(void) { g_spk_freq = 0; g_spk_off_seq++; }
 
 /* ---- Layer 1 test harness: load the real AV.DAT and show every sprite. ---- */
 #ifdef RENDER_TEST
