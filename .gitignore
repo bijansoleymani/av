@@ -1,0 +1,12 @@
+# build products
+/av
+/render-test
+*.o
+*.dSYM/
+
+# generated / regenerable artifacts (disassembly, decoded sprites, screenshots)
+/build/
+
+# python venv used by the reverse-engineering tools
+/.venv/
+__pycache__/
