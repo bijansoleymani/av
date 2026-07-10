@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arcade Volleyball</title>
+<style>
+  html, body { height: 100%; margin: 0; background: #000; color: #9a9a9a;
+               font: 13px/1.5 monospace; }
+  body { display: flex; flex-direction: column; align-items: center;
+         justify-content: center; gap: 12px; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges;
+           /* 16:10, leaving room for the flex gap + controls footer so the
+            * centered column never overflows the viewport */
+           width: min(96vw, calc((100vh - 60px) * 1.6));
+           aspect-ratio: 16 / 10; height: auto;
+           border: 0; outline: none; background: #000; }
+  #controls { text-align: center; }
+  kbd { color: #ddd; background: #1a1a1a; border: 1px solid #333;
+        border-radius: 3px; padding: 0 5px; }
+</style>
+</head>
+<body>
+<canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+<div id="controls">
+  menu: <kbd>&uarr;</kbd> <kbd>&darr;</kbd> + <kbd>Enter</kbd>
+  &nbsp;&middot;&nbsp; P1: <kbd>Z</kbd> left <kbd>X</kbd> jump <kbd>C</kbd> right
+  &nbsp;&middot;&nbsp; P2: <kbd>&larr;</kbd> <kbd>&darr;</kbd> <kbd>&rarr;</kbd> (numpad 1/2/3)
+  &nbsp;&middot;&nbsp; <kbd>Esc</kbd> back
+</div>
+<script>
+  addEventListener('error', function (e) {
+    console.error('UNCAUGHT:', e.message, e.filename + ':' + e.lineno,
+                  e.error && e.error.stack);
+  });
+  addEventListener('unhandledrejection', function (e) {
+    console.error('UNHANDLED REJECTION:', e.reason);
+  });
+  var Module = { canvas: document.getElementById('canvas') };
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

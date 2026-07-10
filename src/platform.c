@@ -202,9 +202,17 @@ void cga_init(void)
         g_audio = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
         if (g_audio) SDL_PauseAudioDevice(g_audio, 0);   /* start (silent) */
     }
-    g_win = SDL_CreateWindow("Arcade Volleyball (1988) — reconstructed",
-                             SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                             SCRW * SCALE, SCRH * SCALE, SDL_WINDOW_SHOWN);
+    {
+        Uint32 flags = SDL_WINDOW_SHOWN;
+#ifdef __EMSCRIPTEN__
+        /* resizable: SDL's emscripten backend then adopts the canvas's CSS
+         * size instead of forcing SCRW*SCALE, so the page stays responsive */
+        flags |= SDL_WINDOW_RESIZABLE;
+#endif
+        g_win = SDL_CreateWindow("Arcade Volleyball (1988) — reconstructed",
+                                 SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                                 SCRW * SCALE, SCRH * SCALE, flags);
+    }
     if (g_win) {
         /* No PRESENTVSYNC: timing is governed by platform_frame()'s 60 Hz limiter
          * so the game speed is identical regardless of the display's refresh. */

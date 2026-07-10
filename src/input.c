@@ -11,7 +11,9 @@
  * Esc release (0x81) sets the pause/quit flag at 0x9d4.
  */
 #include "dos.h"
+#ifndef AV_NO_SDL
 #include <SDL.h>
+#endif
 
 void kb_install(void) { /* SDL delivers key events; no vector to hook */ }
 
@@ -34,6 +36,7 @@ void av_kbd_scancode(unsigned char sc)
     }
 }
 
+#ifndef AV_NO_SDL
 /* SDL physical scancode -> IBM XT set-1 make code. Covers letters, digits,
  * keypad, arrows and common keys so the default bindings (Z/X/C and keypad
  * 1/2/3) and the "Define Keys" screen both work. */
@@ -87,3 +90,4 @@ int xt_from_sdl(int s)
     default: return 0;
     }
 }
+#endif /* AV_NO_SDL */

@@ -16,6 +16,39 @@ make
 ./av                       # run from this directory (it loads ./AV.DAT)
 ```
 
+### Play in the browser (WebAssembly)
+
+The same sources build with [Emscripten](https://emscripten.org) against its
+SDL2 port, with `AV.DAT` packed into the page. The decompiled game owns its
+control flow (the menu busy-waits in `getch`), so the build uses `-sASYNCIFY`
+to let that blocking code yield to the browser inside `SDL_Delay` — no
+restructuring of the 1:1-decompiled logic:
+
+```sh
+brew install emscripten
+make web       # -> web/index.html (+ .js/.wasm/.data)
+make serve     # serve at http://localhost:8001 (wasm needs http, not file://)
+```
+
+The game pauses when the tab is hidden (browsers throttle background timers);
+it runs at the usual deterministic 60 fps whenever the tab is visible.
+
+### Headless under wasmtime (WASI)
+
+Only `platform.c` touches SDL, so the whole game also builds as a pure WASI
+module: [`src/platform_wasi.c`](src/platform_wasi.c) supplies the platform
+layer (no display/audio/clock, frames run flat out) and honours the same
+`AV_INJECT` / `AV_SHOT` env contract as the native build — a scripted match
+under wasmtime is **byte-identical, frame for frame**, to a native
+`SDL_VIDEODRIVER=dummy` run (verified against `tools/verify_golden.sh`'s
+golden frames):
+
+```sh
+brew install wasmtime wasi-libc
+make wasi
+make run-wasi     # scripted 140-frame match -> frame.ppm
+```
+
 ### Controls
 
 | | Left | Right | Jump |

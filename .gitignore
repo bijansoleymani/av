@@ -1,6 +1,9 @@
 # build products
 /av
 /render-test
+/web/
+/av-wasi.wasm
+/frame.ppm
 *.o
 *.dSYM/
 
