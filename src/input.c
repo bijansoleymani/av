@@ -84,9 +84,15 @@ int xt_from_sdl(int s)
     case SDL_SCANCODE_KP_1: return 0x4f; case SDL_SCANCODE_KP_2: return 0x50;
     case SDL_SCANCODE_KP_3: return 0x51; case SDL_SCANCODE_KP_0: return 0x52;
     case SDL_SCANCODE_KP_PERIOD: return 0x53;
-    /* arrow keys double as the keypad codes the game expects */
+    /* The dedicated nav cluster sends E0-prefixed codes on real hardware and
+     * the original ISR ignored the E0 byte, so these keys aliased the keypad
+     * in DOS too: arrows = KP8/2/4/6, End = KP1, PgDn = KP3, etc.  That makes
+     * End / PgDn / Down the no-numpad way to play Player 2 (KP 1/3/2). */
     case SDL_SCANCODE_UP: return 0x48; case SDL_SCANCODE_DOWN: return 0x50;
     case SDL_SCANCODE_LEFT: return 0x4b; case SDL_SCANCODE_RIGHT: return 0x4d;
+    case SDL_SCANCODE_HOME: return 0x47; case SDL_SCANCODE_PAGEUP: return 0x49;
+    case SDL_SCANCODE_END: return 0x4f; case SDL_SCANCODE_PAGEDOWN: return 0x51;
+    case SDL_SCANCODE_INSERT: return 0x52; case SDL_SCANCODE_DELETE: return 0x53;
     default: return 0;
     }
 }

@@ -37,7 +37,7 @@ web/index.html: $(SRC) $(HDR) src/shell.html AV.DAT
 web: web/index.html
 
 serve: web
-	python3 -m http.server 8001 -d web
+	python3 -m http.server 8001 --bind 127.0.0.1 -d web
 
 # --- Headless WASI build for standalone runtimes (wasmtime): platform_wasi.c
 # replaces platform.c (no SDL/display/audio), same AV_INJECT/AV_SHOT env

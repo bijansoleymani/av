@@ -30,8 +30,9 @@ make web       # -> web/index.html (+ .js/.wasm/.data)
 make serve     # serve at http://localhost:8001 (wasm needs http, not file://)
 ```
 
-The game pauses when the tab is hidden (browsers throttle background timers);
-it runs at the usual deterministic 60 fps whenever the tab is visible.
+The game runs at the usual deterministic 60 fps while the tab is visible;
+browsers throttle background timers, so a hidden tab crawls at ~1 fps until
+it is foregrounded again.
 
 ### Headless under wasmtime (WASI)
 
@@ -44,17 +45,23 @@ under wasmtime is **byte-identical, frame for frame**, to a native
 golden frames):
 
 ```sh
-brew install wasmtime wasi-libc
+brew install wasmtime wasi-libc emscripten   # emscripten just for its clang/wasm-ld
 make wasi
 make run-wasi     # scripted 140-frame match -> frame.ppm
 ```
+
+(Any wasm-capable clang works instead of emscripten's — override with
+`make wasi WASI_CC=/path/to/clang`.)
 
 ### Controls
 
 | | Left | Right | Jump |
 |--|--|--|--|
 | **Player 1** | `Z` | `C` | `X` |
-| **Player 2** | numpad `1` / `←` | numpad `3` / `→` | numpad `2` / `↓` |
+| **Player 2** | numpad `1` / `End` | numpad `3` / `PgDn` | numpad `2` / `↓` |
+
+(The `End`/`PgDn`/`↓` aliases are faithful: the nav cluster sends E0-prefixed
+keypad codes, and the original's ISR ignored the E0 prefix.)
 
 Menu: `↑`/`↓` (or `8`/`2`) to move, **Enter** to select, `Esc` to quit.
 Select **Play** to start; **PL1/PL2** cycle Keyboard/Joystick/Mouse/Computer;
